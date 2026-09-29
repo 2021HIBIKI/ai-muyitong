@@ -1,0 +1,3557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI牧易通 · 数字牧业全链平台</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐑</text></svg>">
+<!-- ECharts：npmmirror 优先，jsdelivr 兜底 -->
+<script src="https://cdn.npmmirror.com/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script>
+  window.echarts || document.write('<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"><\/script>');
+</script>
+<style>
+  :root {
+    --ink: #1d1d1f;
+    --ink-2: #6e6e73;
+    --ink-3: #86868b;
+    --card: rgba(255, 255, 255, 0.72);
+    --card-border: rgba(255, 255, 255, 0.7);
+    --green: #34c759;
+    --green-deep: #248a3d;
+    --blue: #0071e3;
+    --amber: #ff9500;
+    --red: #ff3b30;
+    /* 动效词汇（审计：曲线唯一化 + 时长分档） */
+    --ease-out: cubic-bezier(.32, .72, .33, 1);   /* 进场/出场统一强 ease-out（entering/exiting → ease-out） */
+    --dur-press: .12s;   /* 按压反馈（预算 100–160ms） */
+    --dur-hover: .18s;   /* 悬停/颜色变化 */
+    --dur-enter: .25s;   /* 进场与出场过渡（toast / 聚光灯 / 列表条目） */
+    --radius: 20px;
+    --shadow: 0 10px 34px rgba(28, 42, 30, 0.10), 0 2px 8px rgba(28, 42, 30, 0.05);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+            "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; font-family: var(--font); }
+
+  /* ---------- 交互基线（Apple HIG）：按下即响应 / 命中区 / 键盘焦点 / 不可误选 ---------- */
+  button, .tab, .mini-btn, .hero-chip, .pasture-item, .flow-item.clickable,
+  .hist-row.hlog, .dropzone, .sample-btn, .mode-btn {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;   /* 去掉双击缩放带来的 ~300ms 点击延迟 */
+    user-select: none; -webkit-user-select: none;
+  }
+  /* 键盘可达：仅键盘导航时显示焦点环（鼠标点击不出现） */
+  button:focus-visible, .tab:focus-visible, .hero-chip:focus-visible,
+  .pasture-item:focus-visible, .flow-item.clickable:focus-visible,
+  .hist-row.hlog:focus-visible, .dropzone:focus-visible, .sample-btn:focus-visible,
+  .mode-btn:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: 2px;
+  }
+
+  /* ---------- 放牧照片背景（雾化，不抢内容） ---------- */
+  body {
+    background: #eef1ea url("assets/bg-pasture.jpg") center / cover no-repeat fixed;
+  }
+  #fog {
+    position: fixed; inset: 0; z-index: 0;
+    background: linear-gradient(180deg, rgba(248, 249, 246, 0.76), rgba(243, 246, 240, 0.84));
+    -webkit-backdrop-filter: blur(14px) saturate(1);
+    backdrop-filter: blur(14px) saturate(1);
+  }
+
+  /* ---------- 1920×1080 等比缩放舞台 ---------- */
+  #stage {
+    position: absolute; top: 0; left: 0;
+    width: 1920px; height: 1080px;
+    transform-origin: top left;
+    z-index: 1;
+    display: flex; flex-direction: column;
+    padding: 0 14px 16px;
+    color: var(--ink);
+  }
+
+  /* ---------- 左侧导航（分组菜单，毛玻璃） ---------- */
+  .shell { flex: 1; min-height: 0; display: flex; gap: 16px; }
+  .sidebar {
+    width: 236px; flex: none; display: flex; flex-direction: column;
+    padding: 20px 14px 16px;
+    background: rgba(255, 255, 255, 0.55);
+    -webkit-backdrop-filter: blur(20px) saturate(1.05);
+    backdrop-filter: blur(20px) saturate(1.05);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .sidebar .brand { font-size: 26px; padding: 0 10px; margin-bottom: 16px; }
+  .sidebar .brand small { font-size: 13.5px; }
+  .menu { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .menu-group-title {
+    font-size: 14.5px; font-weight: 600; color: var(--ink-3);
+    letter-spacing: 0.04em; padding: 13px 12px 5px;
+  }
+  .menu-item {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 10px 12px; border: 0; background: transparent; cursor: pointer;
+    font-family: var(--font); font-size: 20.5px; font-weight: 600; color: var(--ink-2);
+    border-radius: 12px; text-align: left;
+    transition: color var(--dur-hover) ease, background var(--dur-hover) ease, box-shadow var(--dur-hover) ease, transform var(--dur-press) var(--ease-out);
+  }
+  .menu-item .mi { font-size: 21px; width: 26px; text-align: center; flex: none; }
+  .menu-item:hover { color: var(--ink); background: rgba(120, 120, 128, 0.10); }
+  .menu-item:active { transform: scale(0.97); filter: brightness(0.96); }
+  .menu-item.active {
+    background: #fff; color: var(--ink);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  }
+  .user-block {
+    margin-top: 12px; padding: 14px 12px 4px; border-top: 1px solid rgba(0, 0, 0, 0.08);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .user-block .who { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .user-block .who b { font-size: 18px; color: var(--ink); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 92px; }
+  .user-block .who small { font-size: 13px; color: var(--ink-3); }
+  .brand { display: flex; align-items: center; gap: 12px; font-size: 32.5px; font-weight: 700; letter-spacing: -0.02em; }
+  .brand .logo, .login-brand .logo {
+    width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center;
+    background: linear-gradient(135deg, #34c759, #0f9d58);
+    color: #fff; font-size: 27px; box-shadow: 0 4px 12px rgba(52, 199, 89, 0.35);
+  }
+  .brand small { display: block; font-size: 16.2px; color: var(--ink-3); font-weight: 500; letter-spacing: 0; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(52, 199, 89, 0.18); }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #34c759, #0f9d58); color: #fff; display: grid; place-items: center; font-size: 16px; font-weight: 700; }
+
+  /* ---------- 内容区：页头 + 视图 ---------- */
+  .content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar { height: 76px; flex: none; display: flex; align-items: center; justify-content: space-between; position: relative; }
+  .topbar::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+    height: 1px; background: rgba(0, 0, 0, 0.08);
+  }
+  .page-title { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+  .page-sub { margin: 3px 0 0; font-size: 16.5px; color: var(--ink-3); font-weight: 500; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; font-size: 23px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+  /* ---------- 快捷入口（草场分析页 → 四个预处理/分析能力页） ---------- */
+  .quick-entry { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .qe-btn {
+    display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+    padding: 13px 15px; border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.6); border-radius: 14px; cursor: pointer;
+    font-family: var(--font); font-size: 18px; font-weight: 600; color: var(--ink);
+    transition: background var(--dur-hover) ease, box-shadow var(--dur-hover) ease, transform var(--dur-press) var(--ease-out);
+  }
+  .qe-btn:hover { background: rgba(255, 255, 255, 0.85); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
+  .qe-btn:active { transform: scale(0.97); filter: brightness(0.96); }
+  .qe-btn span { font-size: 14.5px; color: var(--ink-3); font-weight: 500; }
+
+  /* ---------- 登录屏（全屏固定层，不随舞台缩放；frosted 锁屏风） ---------- */
+  .login-screen {
+    position: fixed; inset: 0; z-index: 300;
+    display: grid; place-items: center;
+    background: rgba(238, 241, 234, 0.55);
+    -webkit-backdrop-filter: blur(18px) saturate(1.05);
+    backdrop-filter: blur(18px) saturate(1.05);
+  }
+  .login-screen[hidden] { display: none; }
+  .login-card {
+    width: 460px; padding: 40px 44px 30px;
+    background: rgba(255, 255, 255, 0.66);
+    -webkit-backdrop-filter: blur(28px) saturate(1.15);
+    backdrop-filter: blur(28px) saturate(1.15);
+    border: 1px solid var(--card-border);
+    border-radius: 24px;
+    box-shadow: var(--shadow);
+    animation: viewIn .4s var(--ease-out);
+  }
+  .login-card.shake { animation: loginShake .45s var(--ease-out); }
+  @keyframes loginShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(9px); }
+    60% { transform: translateX(-6px); }
+    80% { transform: translateX(4px); }
+  }
+  .login-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 30px; }
+  .login-brand h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+  .login-brand p { margin: 2px 0 0; font-size: 16px; color: var(--ink-3); font-weight: 500; }
+  .login-field { margin-bottom: 16px; }
+  .login-field label { display: block; font-size: 15.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 7px; }
+  .login-field input {
+    width: 100%; box-sizing: border-box; padding: 12px 15px;
+    font: inherit; font-size: 19px; color: var(--ink);
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 13px; outline: none;
+    transition: border-color var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out);
+  }
+  .login-field input:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.16); }
+  #loginBtn { width: 100%; padding: 13px 0; font-size: 21px; margin-top: 10px; }
+  .login-msg { min-height: 24px; margin-top: 14px; font-size: 16.5px; color: var(--red); text-align: center; }
+  .login-foot { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(0, 0, 0, 0.07); font-size: 15px; color: var(--ink-3); text-align: center; }
+
+  /* ---------- 视图容器 ---------- */
+  main { flex: 1; min-height: 0; position: relative; }
+  .view { position: absolute; inset: 0; display: none; padding-top: 18px; overflow-y: auto; }
+  .view.active { display: flex; flex-direction: column; gap: 16px; animation: viewIn .3s var(--ease-out); }
+  @keyframes viewIn { from { opacity: 0; transform: translateY(10px) scale(.99); } to { opacity: 1; transform: none; } }
+
+  /* ---------- 卡片（毛玻璃） ---------- */
+  .card {
+    background: var(--card);
+    -webkit-backdrop-filter: blur(24px) saturate(1.1);
+    backdrop-filter: blur(24px) saturate(1.1);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px 22px;
+    transition: transform var(--dur-enter) var(--ease-out), box-shadow .25s ease;
+  }
+  .card.hoverable:hover { transform: translateY(-4px); box-shadow: 0 16px 44px rgba(28, 42, 30, 0.14), 0 3px 10px rgba(28, 42, 30, 0.06); }
+  .card-title {
+    font-size: 25.7px; font-weight: 700; letter-spacing: -0.01em;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .card-title .sub { font-size: 17.6px; font-weight: 500; color: var(--ink-3); }
+
+  /* ---------- 概览 · hero ---------- */
+  .hero {
+    flex: none; height: 168px; position: relative; overflow: hidden;
+    display: flex; align-items: center;
+    padding: 0 36px;
+  }
+  .hero::before {
+    content: ""; position: absolute; inset: 0;
+    /* 与全页背景同源：雾化背景上的 hero 是一片清晰的草地，形成“雾气散开”的视觉层次 */
+    background: url("assets/bg-pasture.jpg") center 58% / cover no-repeat;
+    filter: blur(1.5px) saturate(1.05);
+    opacity: 0.95;
+  }
+  .hero::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, rgba(18, 30, 20, 0.58) 0%, rgba(18, 30, 20, 0.40) 50%, rgba(18, 30, 20, 0.58) 100%);
+  }
+  .hero .inner { position: relative; z-index: 1; color: #fff; text-align: center; width: 100%; }
+  .hero h1 { font-size: 46px; font-weight: 700; letter-spacing: -0.02em; }
+  .hero .status { margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 21.6px; opacity: 0.94; }
+  /* 各草场独立：hero 逐场状态（编号 · 覆盖度 · 等级），点击跳到草场分析 */
+  .hero-pastures { display: inline-flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .hero-chip { cursor: pointer; transition: background var(--dur-hover) ease, transform var(--dur-press) var(--ease-out); }
+  /* 注意：.chip.glass 的基础背景在后面定义，故此处用 .chip.hero-chip 提高特异性，避免悬停/按压被覆盖 */
+  .chip.hero-chip:hover { background: rgba(255, 255, 255, 0.34); transform: translateY(-1px); }
+  .chip.hero-chip:active { transform: scale(0.97); background: rgba(255, 255, 255, 0.46); }
+  .hero-chip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 14px; border-radius: 999px; font-size: 19px; font-weight: 600;
+  }
+  .chip.glass { background: rgba(255, 255, 255, 0.22); backdrop-filter: blur(8px); color: #fff; }
+  .chip.normal { background: rgba(52, 199, 89, 0.16); color: var(--green-deep); }
+  .chip.warning { background: rgba(255, 149, 0, 0.16); color: #c93400; }
+  .chip.danger { background: rgba(255, 59, 48, 0.14); color: var(--red); }
+  .chip.pulse { animation: pulse 2.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+  /* ---------- KPI 行（左侧列宽，与温湿度图表右缘对齐） ---------- */
+  .kpis { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .kpi { padding: 16px 18px 14px; }
+  .kpi .label { display: flex; align-items: center; gap: 7px; font-size: 19px; font-weight: 600; color: var(--ink-2); }
+  .kpi .label .ico { font-size: 23px; }
+  .kpi .value {
+    margin-top: 8px; font-size: 51.4px; font-weight: 700; letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums; line-height: 1.1;
+  }
+  .kpi .value .unit { font-size: 21.6px; font-weight: 600; color: var(--ink-3); margin-left: 4px; letter-spacing: 0; }
+  .kpi .foot { margin-top: 6px; font-size: 17.6px; color: var(--ink-3); }
+  .kpi.accent-danger .value { color: var(--red); }
+  .kpi.accent-warning .value { color: var(--amber); }
+  .kpi.accent-normal .value.text { color: var(--green-deep); }
+
+  /* ---------- 概览主体网格 ---------- */
+  .grid-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.62fr 1fr; gap: 16px; }
+  .chart { width: 100%; flex: 1; min-height: 0; }
+
+  /* ---------- 上传视图通用列布局 ---------- */
+  .col { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+
+  /* ---------- 历史记录列表 ---------- */
+  .hist-block { margin-top: auto; border-top: 1px solid rgba(0, 0, 0, 0.07); padding-top: 12px; flex: none; }
+  .hist-block h4 { font-size: 19px; font-weight: 700; color: var(--ink-2); margin-bottom: 9px; }
+  .hist-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; padding-right: 4px; }
+  .hist-list::-webkit-scrollbar { width: 5px; }
+  .hist-list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 3px; }
+  .hist-row {
+    display: flex; align-items: center; gap: 12px; font-size: 18.3px; color: var(--ink-2);
+    padding: 9px 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.5);
+  }
+  .hist-row .t { color: var(--ink-3); font-variant-numeric: tabular-nums; flex: none; width: 104px; }
+  .hist-row .v { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .hist-row .chip { font-size: 16.2px; padding: 1px 10px; margin-left: auto; }
+  .hist-empty { color: var(--ink-3); font-size: 18.3px; text-align: center; padding: 18px 0; }
+
+  /* ---------- 决策流时间轴 ---------- */
+  #flowList { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0; padding-right: 4px; }
+  #flowList::-webkit-scrollbar { width: 5px; }
+  #flowList::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.14); border-radius: 3px; }
+  .flow-item { position: relative; padding: 0 0 18px 24px; }
+  .flow-item::before { /* 时间轴竖线 */
+    content: ""; position: absolute; left: 6px; top: 18px; bottom: -2px; width: 1.5px;
+    background: rgba(0, 0, 0, 0.08);
+  }
+  .flow-item:last-child::before { display: none; }
+  .flow-item .node {
+    position: absolute; left: 0; top: 5px; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--green); box-shadow: 0 0 0 4px rgba(52, 199, 89, 0.16);
+  }
+  .flow-item.warning .node { background: var(--amber); box-shadow: 0 0 0 4px rgba(255, 149, 0, 0.16); }
+  .flow-item.danger .node { background: var(--red); box-shadow: 0 0 0 4px rgba(255, 59, 48, 0.14); }
+  .flow-item .q { font-size: 20.3px; font-weight: 600; line-height: 1.45; }
+  .flow-item .meta { margin-top: 5px; font-size: 17.6px; color: var(--ink-3); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .flow-item .tools span {
+    border: 1px solid rgba(0, 113, 227, 0.25); color: var(--blue);
+    border-radius: 6px; padding: 1px 7px; font-size: 16.2px;
+  }
+  .flow-empty { color: var(--ink-3); text-align: center; padding: 70px 0; font-size: 20.3px; }
+  /* 决策流：点击跳转到对应的历史回答（AI 助手界面回放） */
+  .flow-item.clickable { cursor: pointer; border-radius: 12px; transition: background var(--dur-hover) ease, transform var(--dur-press) var(--ease-out); }
+  .flow-item.clickable:hover { background: rgba(0, 113, 227, 0.07); transform: translateX(2px); }
+  .flow-item.clickable:active { transform: scale(0.99); background: rgba(0, 113, 227, 0.13); }
+  .flow-item.clickable .q::after { content: " ↗"; color: var(--blue); font-size: 17.6px; }
+
+  /* ---------- AI 助手 · 历史对话 ---------- */
+  .hist-row.hlog { cursor: pointer; flex-direction: column; align-items: stretch; gap: 5px; transition: background var(--dur-hover) ease, transform var(--dur-press) var(--ease-out); }
+  .hist-row.hlog:hover { background: rgba(0, 113, 227, 0.08); }
+  .hist-row.hlog:active { transform: scale(0.99); background: rgba(0, 113, 227, 0.13); }
+  .hist-row.hlog.active { background: rgba(0, 113, 227, 0.12); box-shadow: inset 0 0 0 1px rgba(0, 113, 227, 0.25); }
+  .hist-row.hlog .q-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink); }
+  .hist-row.hlog .meta { display: flex; align-items: center; gap: 8px; font-size: 15.6px; color: var(--ink-3); }
+  .hist-row.hlog .meta .chip { margin-left: auto; font-size: 15px; padding: 1px 9px; }
+
+  /* ---------- 上传视图（羊群识别 / 草场分析） ---------- */
+  .split { flex: 1; min-height: 0; display: grid; grid-template-columns: 460px 1fr; gap: 16px; }
+  .dropzone {
+    position: relative; overflow: hidden;
+    border: 2px dashed rgba(0, 0, 0, 0.16); border-radius: 16px;
+    padding: 34px 22px; text-align: center; cursor: pointer;
+    background: rgba(255, 255, 255, 0.45);
+    transition: border-color var(--dur-hover) ease, background var(--dur-hover) ease, transform var(--dur-press) var(--ease-out);
+  }
+  .dropzone:active { transform: scale(0.995); border-color: var(--blue); background: rgba(0, 113, 227, 0.09); }
+  .dropzone .zimg {
+    position: absolute; inset: 0; pointer-events: none;
+    background: url("assets/sheep-flock.jpg") center 32% / cover no-repeat;
+    opacity: 0.15;
+  }
+  .dropzone > * { position: relative; }
+  .dropzone:hover, .dropzone.over { border-color: var(--blue); background: rgba(0, 113, 227, 0.06); }
+  .dropzone .big { font-size: 54.1px; }
+  .dropzone .t1 { margin-top: 10px; font-size: 23px; font-weight: 600; }
+  .dropzone .t2 { margin-top: 4px; font-size: 17.6px; color: var(--ink-3); }
+  .btn {
+    border: 0; border-radius: 12px; cursor: pointer;
+    font-family: var(--font); font-size: 21.6px; font-weight: 600;
+    padding: 11px 26px; color: #fff; background: var(--blue);
+    transition: transform var(--dur-press) var(--ease-out), box-shadow var(--dur-hover) ease, opacity var(--dur-hover) ease, filter var(--dur-press) var(--ease-out);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 14px rgba(0, 113, 227, 0.28);
+  }
+  .btn:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 18px rgba(0, 113, 227, 0.36); }
+  .btn:active { transform: scale(0.97); filter: brightness(0.94); }   /* 按下变暗：材质受力反馈 */
+  .btn:disabled { background: #b9bec4; box-shadow: none; cursor: not-allowed; }
+  .btn.ghost { background: rgba(0, 113, 227, 0.1); color: var(--blue); box-shadow: none; }
+  .btn.small { font-size: 19px; padding: 8px 18px; border-radius: 10px; }
+  .samples { margin-top: 18px; }
+  .samples .cap { font-size: 17.6px; color: var(--ink-3); margin-bottom: 8px; }
+  .samples .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sample-btn {
+    border: 1px solid rgba(0, 0, 0, 0.12); background: #fff; border-radius: 10px;
+    font-family: var(--font); font-size: 17.6px; font-weight: 600; color: var(--ink);
+    padding: 8px 14px; cursor: pointer; transition: border-color var(--dur-hover), background var(--dur-hover), color var(--dur-hover), transform var(--dur-press) var(--ease-out);
+  }
+  .sample-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .sample-btn:active { transform: scale(0.97); border-color: var(--blue); background: rgba(0, 113, 227, 0.07); }
+  .result-hero { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 4px; }
+  .result-hero .num { font-size: 113.6px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--green-deep); line-height: 1; }
+  .result-hero .unit { font-size: 29.8px; font-weight: 600; color: var(--ink-2); }
+  .result-meta { font-size: 19px; color: var(--ink-3); margin-bottom: 14px; }
+  .annotated {
+    max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.08); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.10);
+    display: block; margin: 0 auto;
+  }
+  /* 识别结果区：左侧数值 + 右侧标注图（图占满可用高度，压缩留白） */
+  .result-flex { display: flex; gap: 24px; height: 100%; min-height: 0; }
+  .result-left { flex: none; width: 270px; display: flex; flex-direction: column; justify-content: center; }
+  .result-imgbox { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; }
+  .placeholder {
+    height: 100%; min-height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; color: var(--ink-3); font-size: 20.3px;
+  }
+  .placeholder .big { font-size: 70.3px; opacity: 0.5; }
+  .spinner {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid rgba(0, 0, 0, 0.1); border-top-color: var(--blue);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- 覆盖度环形 + 判定 ---------- */
+  @property --p { syntax: "<number>"; inherits: false; initial-value: 0; }  /* 环形进度平滑动画 */
+  .ring-wrap { display: flex; align-items: center; gap: 34px; }
+  .ring {
+    --p: 0; --ring-color: var(--green);
+    width: 198px; height: 198px; border-radius: 50%; flex: none;
+    background: conic-gradient(var(--ring-color) calc(var(--p) * 1%), rgba(0, 0, 0, 0.07) 0);
+    display: grid; place-items: center;
+    transition: background 0.8s var(--ease-out);
+  }
+  .ring .inner {
+    width: 158px; height: 158px; border-radius: 50%; background: rgba(255, 255, 255, 0.92);
+    display: grid; place-items: center; text-align: center;
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.04);
+  }
+  .ring .pct { font-size: 54.1px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .ring .cap { font-size: 17.6px; color: var(--ink-3); margin-top: 2px; }
+  .ring-info { display: flex; flex-direction: column; gap: 10px; }
+  .ring-info .row { font-size: 20.3px; color: var(--ink-2); }
+  .ring-info .row b { color: var(--ink); font-weight: 700; }
+
+  /* ---------- 计算器表单 ---------- */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+  .field label { display: block; font-size: 17.6px; font-weight: 600; color: var(--ink-2); margin-bottom: 7px; }
+  .field input {
+    width: 100%; border: 1px solid rgba(0, 0, 0, 0.14); border-radius: 11px;
+    padding: 11px 14px; font-size: 21.6px; font-family: var(--font);
+    background: rgba(255, 255, 255, 0.85); color: var(--ink);
+    transition: border-color var(--dur-hover) ease, box-shadow var(--dur-hover) ease;
+    font-variant-numeric: tabular-nums;
+  }
+  .field input:focus { outline: 0; border-color: var(--blue); box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.14); }
+  .calc-result { margin-top: 6px; }
+  .calc-result .big-num { font-size: 62.1px; font-weight: 700; letter-spacing: -0.02em; color: var(--green-deep); font-variant-numeric: tabular-nums; }
+  .calc-result .note { margin-top: 8px; font-size: 18.3px; color: var(--ink-2); line-height: 1.65; }
+  /* 载畜量详细说明：分步拆解 + 告警联动高亮 */
+  .calc-hero { display: flex; align-items: baseline; gap: 10px; margin-top: 12px; }
+  .calc-hero .unit-tag { font-size: 21.6px; font-weight: 600; color: var(--ink-2); }
+  .calc-breakdown { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .calc-breakdown .step {
+    display: flex; align-items: baseline; gap: 10px;
+    font-size: 18.3px; color: var(--ink-2);
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 10px; padding: 8px 12px;
+  }
+  .calc-breakdown .step b { color: var(--ink); font-size: 21.6px; font-variant-numeric: tabular-nums; }
+  .calc-breakdown .step i { margin-left: auto; font-style: normal; color: var(--ink-3); font-size: 16.2px; }
+  .alert-callout { margin-top: 12px; border-radius: 12px; padding: 12px 14px; border-left: 5px solid var(--green); }
+  .alert-callout .ac-title { font-weight: 700; font-size: 20px; margin-bottom: 4px; }
+  .alert-callout .ac-body { font-size: 17.6px; color: var(--ink-2); line-height: 1.6; }
+  .alert-callout .ac-body b { color: var(--ink); }
+  .alert-callout.normal { background: rgba(52, 199, 89, 0.10); border-color: var(--green); }
+  .alert-callout.warning { background: rgba(255, 149, 0, 0.10); border-color: var(--amber); }
+  .alert-callout.danger { background: rgba(255, 59, 48, 0.08); border-color: var(--red); }
+
+  /* ---------- AI 助手 ---------- */
+  .agent-split { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
+  .agent-left { display: flex; flex-direction: column; min-height: 0; }
+  .ask-row { display: flex; gap: 10px; flex: none; }
+  .ask-row input {
+    flex: 1; border: 1px solid rgba(0, 0, 0, 0.14); border-radius: 13px;
+    padding: 13px 18px; font-size: 21.6px; font-family: var(--font);
+    background: rgba(255, 255, 255, 0.9);
+  }
+  .ask-row input:focus { outline: 0; border-color: var(--blue); box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.14); }
+  .quick-row { display: flex; gap: 8px; margin-top: 12px; flex: none; flex-wrap: wrap; }
+  .quick-row .sample-btn { padding: 6px 13px; font-size: 17.6px; }
+  #stream {
+    flex: 1; min-height: 0; margin-top: 14px; overflow-y: auto;
+    background: rgba(255, 255, 255, 0.66);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 14px; padding: 16px 18px;
+    font-size: 19px; line-height: 1.7; color: var(--ink);
+    font-family: "SF Mono", "Cascadia Code", Consolas, "Microsoft YaHei", monospace;
+  }
+  #stream::-webkit-scrollbar { width: 5px; }
+  #stream::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.14); border-radius: 3px; }
+  #stream .empty { color: var(--ink-3); }
+  .sline { margin-bottom: 9px; white-space: pre-wrap; word-break: break-word; animation: lineIn var(--dur-enter) var(--ease-out); display: flex; gap: 10px; }
+  @keyframes lineIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .sline .ts {
+    flex: none; width: 44px; text-align: right; padding-top: 3px;
+    color: var(--ink-3); font-size: 15.6px; font-variant-numeric: tabular-nums;
+  }
+  .sline .body { flex: 1; min-width: 0; }
+  .sline.think .body { color: #5f6368; }
+  .sline.analysis .body { color: var(--green-deep); font-weight: 600; }
+  .sline.tool-call .body { color: var(--blue); }
+  .sline.tool-result .body { color: #1f6f3f; }
+  .sline.answer .body { color: #a8560a; font-weight: 700; }
+  .sline.err .body { color: var(--red); }
+  .caret { display: inline-block; width: 8px; height: 1em; vertical-align: text-bottom;
+           background: var(--green-deep); animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  #decisionCard .placeholder { min-height: 0; height: auto; padding: 40px 0; }
+  .alert-badge { display: inline-flex; align-items: center; gap: 8px; font-size: 27px; font-weight: 700; padding: 9px 22px; border-radius: 13px; }
+  .alert-badge.normal { background: rgba(52, 199, 89, 0.15); color: var(--green-deep); }
+  .alert-badge.warning { background: rgba(255, 149, 0, 0.14); color: #c93400; }
+  .alert-badge.danger { background: rgba(255, 59, 48, 0.12); color: var(--red); animation: pulse 2.2s ease-in-out infinite; }
+  .stocking-line { margin-top: 14px; font-size: 21.6px; color: var(--ink-2); }
+  .stocking-line b { font-size: 46px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; margin: 0 6px; font-variant-numeric: tabular-nums; }
+  .dec-block { margin-top: 16px; border-top: 1px solid rgba(0, 0, 0, 0.07); padding-top: 14px; }
+  .dec-block h4 { font-size: 19px; font-weight: 700; color: var(--ink-2); margin-bottom: 9px; }
+  .dec-block ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .dec-block li { font-size: 19.6px; line-height: 1.55; padding-left: 20px; position: relative; color: var(--ink); }
+  .dec-block li::before { content: "✓"; position: absolute; left: 0; color: var(--green-deep); font-weight: 700; }
+  .dec-block.evidence li::before { content: "·"; color: var(--ink-3); font-size: 27px; line-height: 1; }
+  .rotation-text { font-size: 18.3px; line-height: 1.7; color: var(--ink-2); }
+
+  /* ---------- 多草场管理（草场分析视图） ---------- */
+  .pasture-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+  .pasture-list::-webkit-scrollbar { width: 5px; }
+  .pasture-list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 3px; }
+  .pasture-item {
+    border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 14px; padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.55); cursor: pointer;
+    transition: border-color var(--dur-hover) ease, background var(--dur-hover) ease, box-shadow var(--dur-hover) ease, transform var(--dur-press) var(--ease-out);
+  }
+  .pasture-item:hover { border-color: rgba(0, 113, 227, 0.45); transform: translateY(-1px); }
+  .pasture-item:active { transform: scale(0.99); filter: brightness(0.98); }   /* 大面积轻缩放 */
+  .pasture-item.active { border-color: var(--blue); background: rgba(0, 113, 227, 0.07); box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.10); }
+  .pasture-item .p-top { display: flex; align-items: center; gap: 8px; }
+  .pasture-item .p-name { font-size: 19.5px; font-weight: 700; letter-spacing: -0.01em; }
+  .pasture-item .p-code { font-size: 16.9px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .pasture-item .p-meta { margin-top: 6px; font-size: 16.9px; color: var(--ink-2); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .pasture-item .p-meta b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .pasture-item .p-del {
+    margin-left: auto; border: 0; background: transparent; color: var(--ink-3);
+    font-size: 16.9px; cursor: pointer; padding: 7px 11px; border-radius: 8px;   /* 命中区 ≈34px（误触防护） */
+    transition: background var(--dur-hover) ease, color var(--dur-hover) ease, transform var(--dur-press) var(--ease-out);
+  }
+  .pasture-item .p-del:hover { color: var(--red); background: rgba(255, 59, 48, 0.08); }
+  .pasture-item .p-del:active { transform: scale(0.92); background: rgba(255, 59, 48, 0.18); }
+
+  .pasture-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: none; }
+  .pasture-head .name { font-size: 23.4px; font-weight: 700; letter-spacing: -0.01em; }
+  .pasture-head .meta { font-size: 16.9px; color: var(--ink-2); }
+  .pasture-head .meta b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .pasture-summary { display: flex; align-items: center; gap: 14px; flex: none; margin: 10px 0 12px; flex-wrap: wrap; }
+
+  .plot-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+  .plot-list::-webkit-scrollbar { width: 5px; }
+  .plot-list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 3px; }
+  .plot-block { border: 1px solid rgba(0, 0, 0, 0.07); border-radius: 14px; padding: 10px 14px; background: rgba(255, 255, 255, 0.5); }
+  .plot-head { display: flex; align-items: center; gap: 10px; font-size: 18.3px; font-weight: 700; }
+  .plot-head .p-val { font-variant-numeric: tabular-nums; }
+  .plot-head .p-note { font-weight: 500; color: var(--ink-3); font-size: 16.9px; }
+  .img-row { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid rgba(0, 0, 0, 0.05); }
+  .img-row img { width: 68px; height: 50px; object-fit: cover; border-radius: 9px; border: 1px solid rgba(0, 0, 0, 0.08); flex: none; }
+  .img-row .ph { width: 68px; height: 50px; border-radius: 9px; background: rgba(0, 0, 0, 0.05); display: grid; place-items: center; color: var(--ink-3); font-size: 16.9px; flex: none; }
+  .img-row .code { font-size: 17.6px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .img-row .val { font-size: 17.6px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .img-row .t { font-size: 15.6px; color: var(--ink-3); margin-left: auto; }
+  .mini-btn {
+    border: 1px solid rgba(0, 113, 227, 0.35); background: rgba(0, 113, 227, 0.07); color: var(--blue);
+    border-radius: 9px; padding: 7px 14px; font-size: 16.3px; font-weight: 600; cursor: pointer;
+    font-family: var(--font); white-space: nowrap;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);   /* 顶高光：材质受光边 */
+    transition: background var(--dur-hover) ease, transform var(--dur-press) var(--ease-out);
+  }
+  .mini-btn:hover { background: rgba(0, 113, 227, 0.14); }
+  .mini-btn:active { transform: scale(0.97); background: rgba(0, 113, 227, 0.2); }
+  .mini-btn:disabled { opacity: 1; color: var(--ink-3); border-color: rgba(0, 0, 0, 0.1); background: rgba(120, 120, 128, 0.1); cursor: not-allowed; }
+  .upload-row { display: flex; gap: 8px; align-items: flex-end; flex: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(0, 0, 0, 0.07); }
+  .upload-row .field { flex: 1; }
+  .upload-row input { padding: 9px 12px; font-size: 17.6px; }
+  .upload-hint { font-size: 15.6px; color: var(--ink-3); margin-top: 6px; flex: none; }
+  #ringWrapMini .ring { width: 148px; height: 148px; }
+  #ringWrapMini .ring .inner { width: 118px; height: 118px; }
+  #ringWrapMini .ring .pct { font-size: 38px; }
+  .cov-thumb { max-height: 190px; max-width: 100%; border-radius: 12px; border: 1px solid rgba(0, 0, 0, 0.08); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.10); }
+
+  /* ---------- 视频计数（阶段 6 A1） ---------- */
+  .mode-row { display: flex; gap: 8px; margin-bottom: 12px; flex: none; }
+  .mode-btn {
+    flex: 1; border: 1px solid rgba(0, 0, 0, 0.12); background: #fff; border-radius: 10px;
+    font-family: var(--font); font-size: 16.9px; font-weight: 600; color: var(--ink-2);
+    padding: 9px 10px; cursor: pointer; transition: border-color var(--dur-hover), color var(--dur-hover), background var(--dur-hover), transform var(--dur-press) var(--ease-out);
+  }
+  .mode-btn.active { border-color: var(--blue); color: var(--blue); background: rgba(0, 113, 227, 0.07); }
+  .mode-btn:active { transform: scale(0.97); filter: brightness(0.96); }
+  .video-wrap { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1; overflow-y: auto; padding-right: 4px; }
+  .video-wrap::-webkit-scrollbar { width: 5px; }
+  .video-wrap::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 3px; }
+  #videoCanvas {
+    display: block; margin: 0 auto; max-width: 100%; max-height: 300px;
+    border-radius: 14px; background: #10140f; border: 1px solid rgba(0, 0, 0, 0.10);
+  }
+  .video-controls { display: flex; align-items: center; gap: 12px; flex: none; }
+  /* ---------- 塔基几何校正（四点标定 → 单应变换 → 正射） ---------- */
+  .tower-wrap { display: flex; justify-content: center; border-radius: 14px; background: #10140f; padding: 8px; }
+  #rectifyCanvas { width: 100%; height: 100%; object-fit: contain; cursor: crosshair; border-radius: 8px; }
+  .tower-hint { margin-left: auto; align-self: center; font-size: 16.2px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .tower-result { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; border-top: 1px solid rgba(0, 0, 0, 0.07); padding-top: 12px; flex: 1; min-height: 0; animation: lineIn .25s var(--ease-out); }
+  .tower-result img { width: 100%; flex: 1; min-height: 0; object-fit: contain; background: #10140f; border-radius: 10px; border: 1px solid rgba(0, 0, 0, 0.08); }
+  .tower-result .rows { display: flex; flex-direction: column; gap: 5px; font-size: 16.2px; color: var(--ink-2); }
+  .tower-result b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .steps { display: flex; gap: 8px; flex-wrap: wrap; }
+  .step { font-size: 15.5px; font-weight: 600; color: var(--ink-3); background: rgba(120, 120, 128, 0.10); padding: 6px 14px; border-radius: 999px; }
+  .step.on { background: rgba(52, 199, 89, 0.16); color: var(--green-deep); }
+  .h-matrix { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 14px; line-height: 1.55; background: rgba(0, 0, 0, 0.05); border-radius: 10px; padding: 10px 12px; margin: 0; white-space: pre; overflow-x: auto; }
+  .cov-cmp { display: flex; flex-direction: column; gap: 8px; }
+  .cov-row { display: flex; align-items: center; gap: 10px; font-size: 15.5px; }
+  .cov-lbl { width: 52px; color: var(--ink-3); font-weight: 600; flex: none; }
+  .bar-bg { flex: 1; height: 12px; background: rgba(120, 120, 128, 0.14); border-radius: 6px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 6px; transition: width .4s var(--ease-out); }
+  .bar-fill.before { background: var(--amber); }
+  .bar-fill.after { background: var(--green); }
+  .cov-row b { width: 58px; text-align: right; font-variant-numeric: tabular-nums; }
+  .annotated { width: 100%; flex: 1; min-height: 0; object-fit: contain; background: rgba(0, 0, 0, 0.05); border-radius: 12px; border: 1px solid rgba(0, 0, 0, 0.08); }
+  .zone-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .zone-card { border: 1px solid rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.6); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; animation: lineIn .25s var(--ease-out); }
+  .zone-head { display: flex; align-items: center; justify-content: space-between; }
+  .zone-code { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg, #34c759, #0f9d58); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 15px; }
+  .zone-head b { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .zone-sub { font-size: 13.5px; color: var(--ink-3); }
+  input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; background: rgba(120, 120, 128, 0.2); outline: none; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 1px solid rgba(0, 0, 0, 0.1); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); cursor: pointer; }
+  input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 1px solid rgba(0, 0, 0, 0.1); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); cursor: pointer; }
+  .fc-rows { display: flex; flex-direction: column; gap: 2px; }
+  .fc-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 2px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); font-size: 16.5px; color: var(--ink-2); }
+  .fc-row b { font-size: 19px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .fc-risk { margin-top: 12px; padding: 10px 14px; border-radius: 12px; font-size: 15.5px; font-weight: 600; line-height: 1.5; animation: lineIn .25s var(--ease-out); }
+  .fc-risk.warning { background: rgba(255, 149, 0, 0.14); color: #b25000; }
+  .fc-risk.danger { background: rgba(255, 59, 48, 0.12); color: #c62828; }
+  .fc-values { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; overflow-y: auto; }
+  .fc-val-row { display: flex; justify-content: space-between; font-size: 15.5px; color: var(--ink-2); padding: 3px 2px; }
+  .fc-val-row b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .hcard { border: 1px solid rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.6); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 9px; cursor: pointer; transition: box-shadow var(--dur-hover) ease, transform var(--dur-press) var(--ease-out); }
+  .hcard:hover { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); }
+  .hcard:active { transform: scale(0.985); }
+  .hcard.on { border-color: rgba(52, 199, 89, 0.5); box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.15); }
+  .hcard-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .hcard-name { font-size: 17.5px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hcard-score { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); line-height: 1; }
+  .hcard-score small { font-size: 17px; color: var(--ink-3); font-weight: 600; margin-left: 3px; }
+  .hbar { display: flex; align-items: center; gap: 8px; font-size: 14.5px; color: var(--ink-3); }
+  .hbar span { width: 48px; flex: none; font-weight: 600; }
+  .hbar .bar-bg { flex: 1; }
+  .hbar b { width: 40px; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .bar-fill.missing { background: rgba(120, 120, 128, 0.3); }
+  .hdetail-row { display: flex; flex-direction: column; gap: 4px; padding: 10px 2px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); }
+  .hdetail-meta { font-size: 13.5px; color: var(--ink-3); padding-left: 56px; }
+  .palert-list { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+  .palert-row { display: grid; grid-template-columns: 76px 1fr 130px 120px 96px; gap: 12px; align-items: center; padding: 12px 16px; border: 1px solid rgba(0, 0, 0, 0.07); border-radius: 14px; background: rgba(255, 255, 255, 0.6); font-size: 15.5px; animation: lineIn .25s var(--ease-out); }
+  .palert-row .pa-title { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .palert-row .pa-msg { grid-column: 2 / -1; font-size: 14.5px; color: var(--ink-3); line-height: 1.5; }
+  .palert-row .pa-when { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .palert-row .pa-cov { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .palert-empty { padding: 34px; text-align: center; color: var(--ink-3); font-size: 16.5px; }
+  .device-list { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
+  .device-row { display: grid; grid-template-columns: 52px 230px 1fr 150px; gap: 14px; align-items: center; padding: 14px 18px; border: 1px solid rgba(0, 0, 0, 0.07); border-radius: 14px; background: rgba(255, 255, 255, 0.6); flex: 1; }
+  .device-icon { font-size: 30px; text-align: center; }
+  .device-name { font-weight: 700; font-size: 17px; color: var(--ink); }
+  .device-model { font-size: 13.5px; color: var(--ink-3); margin-top: 2px; }
+  .device-role { font-size: 15px; color: var(--ink-2); line-height: 1.5; }
+  .set-rows { display: flex; flex-direction: column; }
+  .set-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 10px 2px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); font-size: 16px; color: var(--ink-2); }
+  .set-row b { color: var(--ink); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .user-list { display: flex; flex-direction: column; gap: 8px; }
+  .user-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border: 1px solid rgba(0, 0, 0, 0.07); border-radius: 14px; background: rgba(255, 255, 255, 0.6); font-size: 15.5px; animation: lineIn .25s var(--ease-out); }
+  .user-row .u-name { font-weight: 700; color: var(--ink); min-width: 90px; }
+  .user-row .u-when { color: var(--ink-3); font-variant-numeric: tabular-nums; flex: 1; }
+  .user-row .u-ops { display: flex; gap: 8px; }
+  .role-tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 14px; font-weight: 600; }
+  .role-tag.admin { background: rgba(0, 113, 227, 0.12); color: #0062c4; }
+  .role-tag.herder { background: rgba(52, 199, 89, 0.14); color: var(--green-deep); }
+  .role-tag.ranger { background: rgba(255, 149, 0, 0.14); color: #b25000; }
+  .video-controls input[type="range"] { flex: 1; accent-color: var(--blue); }
+  .video-controls .pos { font-size: 16.3px; color: var(--ink-3); font-variant-numeric: tabular-nums; min-width: 92px; text-align: right; }
+  .video-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; flex: none; }
+  .vstat { background: rgba(255, 255, 255, 0.62); border: 1px solid rgba(0, 0, 0, 0.06); border-radius: 12px; padding: 10px 14px; }
+  .vstat label { display: block; font-size: 15.6px; color: var(--ink-3); }
+  .vstat b { font-size: 31px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .vstat.flow b { font-size: 25px; }
+  #videoChart { height: 150px; flex: none; }
+
+  /* ---------- 巡检告警（阶段 7 A3：逐场巡检） ---------- */
+  .alert-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px; flex: 1; min-height: 0; }
+  .alert-list::-webkit-scrollbar { width: 5px; }
+  .alert-list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.14); border-radius: 3px; }
+  /* 本轮逐场巡检结果（每个草场的判定都告诉用户） */
+  .patrol-result {
+    flex: none; margin-bottom: 10px; padding: 10px 12px; border-radius: 12px;
+    background: rgba(0, 113, 227, 0.06); border: 1px solid rgba(0, 113, 227, 0.14);
+    animation: lineIn var(--dur-enter) var(--ease-out);
+  }
+  .patrol-result .pr-head { font-size: 15.6px; font-weight: 600; color: var(--ink-2); margin-bottom: 7px; }
+  .patrol-result .pr-row { display: flex; align-items: center; gap: 9px; font-size: 16.2px; padding: 2.5px 0; }
+  .patrol-result .pr-row .pr-who { font-weight: 600; }
+  .patrol-result .pr-row .pr-cov { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .patrol-result .pr-row .pr-why { margin-left: auto; color: var(--ink-3); font-size: 15.6px; }
+  .patrol-result .chip { font-size: 14.4px; padding: 0 8px; }
+  /* 跳转聚焦（点击实时弹窗 → 定位并高亮告警面板/该条告警）
+     面板在概览页本来就可见，仅描边太不显眼：改为「聚光灯」——其余界面压暗、
+     目标面板保持明亮，并给目标告警条加标记 */
+  .card.spot-on { position: relative; z-index: 201; }
+  .spotlight { position: fixed; inset: 0; z-index: 200; pointer-events: none; animation: spotIn var(--dur-hover) var(--ease-out); }
+  .spotlight .sp-hole {
+    position: absolute; border-radius: 20px;
+    box-shadow: 0 0 0 9999px rgba(14, 24, 16, 0.48), 0 0 0 3px rgba(0, 113, 227, 0.8);
+  }
+  .spotlight.out { opacity: 0; transition: opacity var(--dur-enter) var(--ease-out); }
+  @keyframes spotIn { from { opacity: 0; } to { opacity: 1; } }
+  .flash { animation: flashRing 1.8s ease-out 2; }
+  @keyframes flashRing {
+    0% { outline: 3px solid rgba(0, 113, 227, 0.55); outline-offset: 1px; }
+    100% { outline: 3px solid rgba(0, 113, 227, 0); outline-offset: 12px; }
+  }
+  /* 被定位的那一条告警：整条描边高亮 + 左侧箭头标记 */
+  .alert-item.flash-hit {
+    animation: itemHit 1.9s ease-out 2;
+    box-shadow: inset 0 0 0 2px rgba(0, 113, 227, 0.55);
+  }
+  @keyframes itemHit {
+    0%, 100% { background-color: rgba(0, 113, 227, 0.16); }
+    50% { background-color: rgba(0, 113, 227, 0.04); }
+  }
+  .alert-marker {
+    display: inline-flex; align-items: center; gap: 4px; margin-left: 6px;
+    font-size: 14.4px; font-weight: 700; color: var(--blue);
+  }
+  .panel-badge {
+    margin-left: auto; font-size: 15px; font-weight: 600; color: var(--blue);
+    background: rgba(0, 113, 227, 0.1); border-radius: 999px; padding: 2px 10px;
+    animation: spotIn .2s var(--ease-out);
+  }
+  .alert-item {
+    border-radius: 12px; padding: 9px 13px; background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(0, 0, 0, 0.05); border-left: 5px solid var(--green);
+    animation: lineIn var(--dur-enter) var(--ease-out);
+  }
+  .alert-item.warning { border-left-color: var(--amber); background: rgba(255, 149, 0, 0.08); }
+  .alert-item.danger { border-left-color: var(--red); background: rgba(255, 59, 48, 0.07); }
+  .alert-item .a-top { display: flex; align-items: center; gap: 8px; }
+  .alert-item .a-title { font-weight: 700; font-size: 17.6px; }
+  .alert-item .a-top .t { margin-left: auto; font-size: 15.6px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .alert-item .a-msg { margin-top: 4px; font-size: 15.6px; color: var(--ink-2); line-height: 1.5; max-height: 46px; overflow: hidden; white-space: pre-wrap; }
+  .alert-item .a-ack { font-size: 15px; color: var(--green-deep); }
+  /* 实时弹出（SSE） */
+  #toastHost { position: absolute; top: 24px; right: 24px; z-index: 60; display: flex; flex-direction: column; gap: 12px; }
+  .alert-toast {
+    width: 400px; cursor: pointer; background: rgba(255, 255, 255, 0.96);
+    border-radius: 16px; padding: 14px 16px; border-left: 6px solid var(--green);
+    box-shadow: 0 18px 50px rgba(20, 30, 20, 0.28), 0 2px 8px rgba(0, 0, 0, 0.08);
+    animation: toastIn .35s var(--ease-out);
+  }
+  .alert-toast.warning { border-left-color: var(--amber); }
+  .alert-toast.danger { border-left-color: var(--red); }
+  .alert-toast .at-top { display: flex; align-items: center; gap: 8px; }
+  .alert-toast .at-top b { font-size: 18.2px; }
+  .alert-toast .at-msg { margin-top: 6px; font-size: 15.6px; color: var(--ink-2); line-height: 1.55; max-height: 70px; overflow: hidden; white-space: pre-wrap; }
+  .alert-toast .at-hint { margin-top: 8px; font-size: 15px; color: var(--blue); }
+  .alert-toast.out { opacity: 0; transform: translateX(24px); transition: opacity var(--dur-enter) var(--ease-out), transform var(--dur-enter) var(--ease-out); }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(36px) scale(.96); } to { opacity: 1; transform: none; } }
+
+  /* ---------- 底部状态 ---------- */
+  .footline {
+    flex: none; display: flex; justify-content: space-between; align-items: center;
+    font-size: 16.9px; color: var(--ink-3); padding: 0 6px; height: 28px;
+  }
+
+  /* ---------- 系统偏好（Apple §14）：低动效 / 低透明 ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    /* 位移/缩放类入场 → 仅保留淡入（避免前庭刺激）；按压反馈保留（属直接反馈，不是装饰） */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .view.active, .sline, .alert-item, .patrol-result, .panel-badge, .alert-toast, .spotlight {
+      animation-name: fadeIn;
+    }
+    .chip.hero-chip:hover, .pasture-item:hover, .flow-item.clickable:hover, .card.hoverable:hover {
+      transform: none;
+    }
+    .chip.pulse, .alert-badge.danger { animation: none; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    /* 半透明材质 → 更实：提高不透明度并去掉模糊（Safari/iOS 生效；Chromium 暂无此偏好，保留无害） */
+    #fog { background: #f4f6f1; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .card { background: rgba(255, 255, 255, 0.96); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .chip.glass { background: rgba(30, 44, 34, 0.66); backdrop-filter: none; }
+    .alert-toast { background: #fff; }
+    .login-screen { background: rgba(248, 249, 246, 0.97); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .login-card { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  }
+</style>
+</head>
+<body>
+<div id="fog"></div>
+
+<!-- ================= 登录屏（未登录时盖住舞台；登录后 hidden） ================= -->
+<div id="loginScreen" class="login-screen" hidden>
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="logo">🐑</div>
+      <div><h1>AI牧易通</h1><p>数字牧业全链平台 · MVP</p></div>
+    </div>
+    <div class="login-field">
+      <label for="loginUser">用户名</label>
+      <input id="loginUser" autocomplete="username" value="admin" autofocus>
+    </div>
+    <div class="login-field">
+      <label for="loginPass">密码</label>
+      <input id="loginPass" type="password" autocomplete="current-password" placeholder="请输入密码">
+    </div>
+    <button class="btn" id="loginBtn">登 录</button>
+    <div class="login-msg" id="loginMsg"></div>
+    <div class="login-foot">演示账号 admin / admin123（可在 .env 中修改）</div>
+  </div>
+</div>
+
+<div id="stage" style="visibility:hidden">
+  <div class="shell">
+    <!-- ================= 左侧分组菜单 ================= -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">🐑</div>
+        <div>AI牧易通<small>数字牧业全链平台</small></div>
+      </div>
+      <nav class="menu" id="menu">
+        <div class="menu-group-title">数据总览</div>
+        <button class="menu-item active" data-view="overview" role="button" tabindex="0"><span class="mi">🏞️</span>总览界面</button>
+        <div class="menu-group-title">智能识别</div>
+        <button class="menu-item" data-view="sheep" role="button" tabindex="0"><span class="mi">🐑</span>羊群识别</button>
+        <div class="menu-group-title">草场监测</div>
+        <button class="menu-item" data-view="grass" role="button" tabindex="0"><span class="mi">🌱</span>草场分析</button>
+        <button class="menu-item" data-view="rectify" role="button" tabindex="0"><span class="mi">📐</span>塔基几何校正</button>
+        <button class="menu-item" data-view="zoning" role="button" tabindex="0"><span class="mi">🧩</span>分区自动分割</button>
+        <button class="menu-item" data-view="forecast" role="button" tabindex="0"><span class="mi">📈</span>覆盖度预测</button>
+        <button class="menu-item" data-view="health" role="button" tabindex="0"><span class="mi">💚</span>多模态评分</button>
+        <div class="menu-group-title">智能服务</div>
+        <button class="menu-item" data-view="agent" role="button" tabindex="0"><span class="mi">🤖</span>AI 助手</button>
+        <button class="menu-item" data-view="patrol" role="button" tabindex="0"><span class="mi">🚨</span>巡检告警</button>
+        <div class="menu-group-title">系统管理</div>
+        <button class="menu-item" data-view="devices" role="button" tabindex="0"><span class="mi">📡</span>设备台账</button>
+        <button class="menu-item" data-view="users" role="button" tabindex="0"><span class="mi">👤</span>用户管理</button>
+        <button class="menu-item" data-view="settings" role="button" tabindex="0"><span class="mi">⚙️</span>系统设置</button>
+      </nav>
+      <div class="user-block">
+        <div class="who"><span class="avatar" id="userAvatar">A</span><div><b id="userName">admin</b><small>已登录</small></div></div>
+        <button class="mini-btn" id="logoutBtn">退出</button>
+      </div>
+    </aside>
+
+    <div class="content">
+      <header class="topbar">
+        <div>
+          <h1 class="page-title" id="pageTitle">总览界面</h1>
+          <p class="page-sub" id="pageSub">牧场状态 · 告警 · 决策流</p>
+        </div>
+        <div class="topbar-right"><span class="dot"></span><span id="clock">--:--:--</span></div>
+      </header>
+      <main>
+    <!-- ================= 视图 1 · 概览 ================= -->
+    <section class="view active" id="view-overview">
+      <div class="card hero" style="padding:0">
+        <div class="inner" style="padding:0 36px">
+          <h1>AI牧易通 · 数字牧业驾驶舱</h1>
+          <div class="status">
+            <span class="hero-pastures" id="heroPastures"><span class="chip glass">正在获取草场状态…</span></span>
+            <span id="heroText"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-main">
+        <div class="col" style="min-height:0">
+          <div class="kpis">
+            <div class="card kpi hoverable"><div class="label"><span class="ico">🐑</span>羊群数量</div><div class="value"><span id="kpiSheep">0</span><span class="unit">只</span></div><div class="foot">最新一次识别结果</div></div>
+            <div class="card kpi hoverable"><div class="label"><span class="ico">🌿</span>监测草场</div><div class="value"><span id="kpiPastures">0</span><span class="unit">个</span></div><div class="foot" id="kpiPasturesFoot">各草场独立监测</div></div>
+            <div class="card kpi hoverable" id="kpiAlertCard"><div class="label"><span class="ico">⚠️</span>告警等级</div><div class="value text" id="kpiAlert">—</div><div class="foot" id="kpiAlertFoot">各草场独立判定 · 取最严重</div></div>
+            <div class="card kpi hoverable"><div class="label"><span class="ico">🐄</span>建议载畜量</div><div class="value"><span id="kpiStocking">0</span><span class="unit">羊单位</span></div><div class="foot">各草场独立核定后合计</div></div>
+          </div>
+          <div class="card" style="display:flex;flex-direction:column;min-height:0;flex:1">
+            <div class="card-title">环境温湿度 · 近 48 小时 <span class="sub">1 小时/点 · 可缩放 · 十字准线</span></div>
+            <div id="envChart" class="chart"></div>
+          </div>
+        </div>
+        <div class="col" style="min-height:0">
+          <div class="card" id="alertPanel" style="display:flex;flex-direction:column;min-height:0;flex:1">
+            <div class="card-title">巡检告警
+              <span class="sub" style="display:flex;align-items:center;gap:10px">
+                逐场巡检 · SSE 实时推送 · 共 <span id="alertCount">0</span> 条
+                <button class="mini-btn" id="patrolRunBtn">立即巡检</button>
+              </span>
+            </div>
+            <div class="patrol-result" id="patrolResult" hidden></div>
+            <div class="alert-list" id="alertList"><div class="hist-empty">暂无告警 · 巡检未发现异常</div></div>
+          </div>
+          <div class="card" style="display:flex;flex-direction:column;min-height:0;flex:1">
+            <div class="card-title">Agent 决策流 <span class="sub">点击跳转到对应回答 · <span id="flowCount"></span></span></div>
+            <div id="flowList"><div class="flow-empty">暂无决策记录</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 2 · 羊群识别 ================= -->
+    <section class="view" id="view-sheep">
+      <div class="split" style="grid-template-columns: 1fr 1fr">
+        <div class="col">
+          <div class="card hoverable" style="display:flex;flex-direction:column;flex:none">
+            <div class="card-title">上传素材 <span class="sub" id="sheepModeHint">图片计数</span></div>
+            <div class="mode-row" id="sheepModeRow">
+              <button class="mode-btn active" data-mode="image">图片计数</button>
+              <button class="mode-btn" data-mode="video">视频计数（跟踪 + 越线）</button>
+            </div>
+            <div class="dropzone" id="sheepDrop">
+              <div class="zimg"></div>
+              <div class="big">📷</div>
+              <div class="t1" id="sheepDropTitle">拖拽图片到此处</div>
+              <div class="t2" id="sheepDropHint">或点击选择文件（JPG / PNG）</div>
+            </div>
+            <input type="file" id="sheepFile" accept="image/*" hidden>
+            <div class="samples" id="sheepSamplesImage">
+              <div class="cap">快速样例（编号=草场-用途-序号，S 为航拍羊群照片；计数为标注参考值 ±2 · 完整图库见 data/samples/gallery）</div>
+              <div class="row">
+                <button class="sample-btn" data-src="/samples/sheep/P1-S-01.jpg">P1-S-01 ≈33只</button>
+                <button class="sample-btn" data-src="/samples/sheep/P1-S-02.jpg">P1-S-02 ≈19只</button>
+                <button class="sample-btn" data-src="/samples/sheep/P1-S-03.jpg">P1-S-03 ≈11只</button>
+                <button class="sample-btn" data-src="/samples/sheep/P1-S-04.jpg">P1-S-04 ≈8只</button>
+                <button class="sample-btn" data-src="/samples/sheep/P2-S-01.jpg">P2-S-01 ≈149只</button>
+                <button class="sample-btn" data-src="/samples/sheep/P2-S-02.jpg">P2-S-02 ≈88只</button>
+                <button class="sample-btn" data-src="/samples/sheep/P2-S-03.jpg">P2-S-03 ≈10只</button>
+                <button class="sample-btn" data-src="/samples/sheep/P3-S-01.jpg">P3-S-01 ≈7只</button>
+                <button class="sample-btn" data-src="/samples/sheep/P3-S-02.jpg">P3-S-02 ≈2只</button>
+                <button class="sample-btn" data-src="/samples/sheep/P3-S-03.jpg">P3-S-03 0只</button>
+              </div>
+            </div>
+            <div class="samples" id="sheepSamplesVideo" style="display:none">
+              <div class="cap">视频样例（随仓库打包 · Pexels License）</div>
+              <div class="row">
+                <button class="sample-btn" data-video="/samples/video/aerial_flock.mp4">航拍大群 · 数清楚 12s</button>
+                <button class="sample-btn" data-video="/samples/video/sheep_road.mp4">公路羊群 · 越线进出 5s</button>
+              </div>
+            </div>
+            <div class="dec-block">
+              <h4>识别说明</h4>
+              <div class="rotation-text" id="sheepHelp">YOLO11 羊专用权重（ICAERUS 开源，GPU 加速推理）+ 跟踪去重计数；自动绘制检测框并入库。快速样例为 Merino 羊无人机公开数据集，编号即归属（草场-用途-序号，S=航拍羊群）。</div>
+            </div>
+          </div>
+          <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column;padding-bottom:12px">
+            <div class="card-title">羊群数量趋势 · 30 天 <span class="sub" id="sheepSub"></span></div>
+            <div id="sheepChart" class="chart"></div>
+          </div>
+        </div>
+        <div class="card" id="sheepResultCard" style="display:flex;flex-direction:column">
+          <div class="card-title">识别结果 <span class="sub" id="sheepMeta"></span></div>
+          <div class="placeholder" id="sheepPlaceholder" style="height:auto;flex:1">
+            <div class="big">🐑</div>
+            <div>上传图片后，这里将显示羊群数量与标注图</div>
+          </div>
+          <div id="sheepResult" style="display:none;flex:1;min-height:0">
+            <div class="result-flex">
+              <div class="result-left">
+                <div class="result-hero"><span class="num" id="sheepCount">0</span><span class="unit">只羊</span></div>
+                <div class="result-meta" id="sheepDetail"></div>
+              </div>
+              <div class="result-imgbox"><img class="annotated" id="sheepImg" alt="检测标注图"></div>
+            </div>
+          </div>
+          <div id="videoResult" class="video-wrap" style="display:none">
+            <canvas id="videoCanvas"></canvas>
+            <div class="video-controls">
+              <button class="btn small" id="videoPlay">▶ 播放</button>
+              <input type="range" id="videoSeek" min="0" max="0" value="0" step="1">
+              <span class="pos" id="videoPos">0 / 0</span>
+            </div>
+            <div class="video-stats">
+              <div class="vstat"><label>当前帧计数</label><b id="vsNow">0</b></div>
+              <div class="vstat"><label>同帧最大并发</label><b id="vsMax">0</b></div>
+              <div class="vstat"><label>累计出现过</label><b id="vsUnique">0</b></div>
+              <div class="vstat flow"><label>进 / 出 / 净</label><b id="vsFlow">0 / 0 / 0</b></div>
+            </div>
+            <div id="videoChart"></div>
+            <div class="dec-block" style="flex:none">
+              <h4>口径说明</h4>
+              <div class="rotation-text" id="videoNote"></div>
+            </div>
+          </div>
+          <div class="hist-block" id="sheepHistBlock" style="flex:1;min-height:0;display:flex;flex-direction:column">
+            <h4>最近识别记录</h4>
+            <div class="hist-list" id="sheepHistory" style="flex:1;max-height:none"><div class="hist-empty">暂无识别记录</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 3 · 草场分析（多草场管理） ================= -->
+    <section class="view" id="view-grass">
+      <div class="split" style="grid-template-columns: 400px 1fr 450px">
+        <div class="card" style="display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">草场管理 <span class="sub" id="pastureCount"></span></div>
+          <div class="pasture-list" id="pastureList"><div class="hist-empty">加载中…</div></div>
+          <div id="newPastureForm" style="display:none;flex:none;margin-top:14px">
+            <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:10px 12px">
+              <div class="field"><label>草场编号</label><input id="npCode" placeholder="P4" autocomplete="off"></div>
+              <div class="field"><label>名称</label><input id="npName" placeholder="南岭牧区" autocomplete="off"></div>
+              <div class="field"><label>区域</label><input id="npRegion" placeholder="南区" autocomplete="off"></div>
+              <div class="field"><label>面积（亩）</label><input id="npArea" type="number" value="100" min="0"></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:14px">
+              <button class="btn small" id="npCreate">创建</button>
+              <button class="btn ghost small" id="npCancel">取消</button>
+            </div>
+          </div>
+          <button class="btn ghost small" id="npToggle" style="margin-top:14px;flex:none">＋ 新建草场</button>
+          <div class="dec-block" style="margin-top:auto;flex:none">
+            <h4>编号与归属</h4>
+            <div class="rotation-text">照片编号 = 草场编号-分区-序号（如 P1-A-01），编号即归属证明；一个草场的全部编号照片共同决定该草场状况（各分区覆盖度聚合）。</div>
+          </div>
+        </div>
+
+        <div class="card" style="display:flex;flex-direction:column;min-height:0">
+          <div class="pasture-head" id="pastureHead"><span class="name">草场详情</span><span class="meta">请选择左侧草场</span></div>
+          <div class="pasture-summary" id="pastureSummary"></div>
+          <div class="plot-list" id="plotList"><div class="hist-empty">选择草场后显示各分区的编号照片</div></div>
+          <div class="upload-row" id="uploadRow" style="display:none">
+            <div class="field" style="max-width:130px"><label>分区</label><input id="upPlot" autocomplete="off"></div>
+            <div class="field"><label>照片编号（自动解析归属）</label><input id="upCode" autocomplete="off"></div>
+            <button class="btn small" id="upBtn" style="flex:none">上传分析</button>
+            <input type="file" id="upFile" accept="image/*" hidden>
+          </div>
+          <div class="upload-hint" id="uploadHint" style="display:none"></div>
+          <div class="card-title" style="margin-top:14px;flex:none">覆盖度趋势 · 30 天 <span class="sub" id="covSub"></span></div>
+          <div id="covChart" style="height:168px;flex:none"></div>
+        </div>
+
+        <div class="col" style="gap:16px">
+          <div class="card" style="flex:none" id="quickEntry">
+            <div class="card-title">图像分析能力 · 快捷入口 <span class="sub">点击进入独立页面</span></div>
+            <div class="quick-entry">
+              <button class="qe-btn" data-goto="rectify" role="button" tabindex="0"><b>📐 塔基几何校正</b><span>四点标定 · 单应变换 → 正射视图</span></button>
+              <button class="qe-btn" data-goto="zoning" role="button" tabindex="0"><b>🧩 分区自动分割</b><span>植被掩膜连通域 → A/B/C 分区</span></button>
+              <button class="qe-btn" data-goto="forecast" role="button" tabindex="0"><b>📈 覆盖度预测</b><span>Holt 线性趋势 + 置信带</span></button>
+              <button class="qe-btn" data-goto="health" role="button" tabindex="0"><b>💚 多模态评分</b><span>覆盖度 · 绿度 · 环境融合</span></button>
+            </div>
+          </div>
+
+          <div class="card" style="display:flex;flex-direction:column;flex:none">
+            <div class="card-title">照片分析结果 <span class="sub" id="grassMeta"></span></div>
+            <div class="placeholder" id="grassPlaceholder" style="height:auto;min-height:120px">
+              <div class="big">🌾</div>
+              <div>点击照片「分析」或「一键分析全部照片」后，这里显示覆盖度与判定</div>
+            </div>
+            <div id="grassResult" style="display:none;flex-direction:column;gap:14px">
+              <div class="ring-wrap" id="ringWrapMini">
+                <div class="ring" id="covRing">
+                  <div class="inner">
+                    <div><div class="pct" id="covPct">0%</div><div class="cap">植被覆盖度</div></div>
+                  </div>
+                </div>
+                <div class="ring-info">
+                  <div class="row">绿度指数 GLI：<b id="covGli">—</b></div>
+                  <div class="row">覆盖度判定：<span class="chip normal" id="covJudge">—</span></div>
+                  <div class="row" style="font-size:15.6px;color:var(--ink-3)">判定阈值：≥60% 正常 · 35–60% 预警 · &lt;35% 危险</div>
+                </div>
+              </div>
+              <div style="text-align:center"><img class="cov-thumb" id="covThumb" alt="分析照片" style="display:none"></div>
+            </div>
+          </div>
+
+          <div class="card hoverable" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto">
+            <div class="card-title">载畜量计算 <span class="sub" id="calcScope">NY/T 635</span></div>
+            <div class="form-grid">
+              <div class="field"><label>亩均可食产量（kg/亩）</label><input id="fYield" type="number" value="800" min="0"></div>
+              <div class="field"><label>草场面积（亩）</label><input id="fArea" type="number" value="100" min="0"></div>
+              <div class="field"><label>牧草利用率（0–1）</label><input id="fUtil" type="number" value="0.5" min="0" max="1" step="0.05"></div>
+              <div class="field"><label>放牧天数（天）</label><input id="fDays" type="number" value="30" min="0"></div>
+            </div>
+            <div style="margin-top:16px"><button class="btn" id="calcBtn">计算载畜量</button></div>
+            <div class="calc-result" id="calcResult">
+              <div class="note" style="color:var(--ink-3)">公式：载畜量 = 产量 × 利用率 ÷ (日食量 2kg × 放牧天数)，1 牛 ≈ 5 羊单位；切换草场后面积与亩产自动带入</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 · 塔基几何校正（独立页） ================= -->
+    <section class="view" id="view-rectify">
+      <div class="split" style="grid-template-columns:1fr 400px;grid-template-rows:minmax(0,1fr)">
+        <div class="card" style="display:flex;flex-direction:column;gap:14px">
+          <div class="card-title">四点标定 · 单应变换 <span class="sub">塔基斜拍图 → 正射视图</span></div>
+          <div class="steps">
+            <span class="step on" id="rectStep1">① 载入塔基照片</span>
+            <span class="step" id="rectStep2">② 点选 4 个地面参考点</span>
+            <span class="step" id="rectStep3">③ 校正并分析</span>
+          </div>
+          <div id="rectifyPick">
+            <div class="dropzone" id="rectifyDrop">
+              <div class="t1">上传塔基斜拍照片</div>
+              <div class="t2">或点「载入样例」一键体验（内置地面四边形标定）</div>
+            </div>
+          </div>
+          <input type="file" id="rectifyFile" accept="image/*" hidden>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn small" id="rectifySampleBtn">载入样例</button>
+            <button class="btn ghost small" id="rectifyResetBtn" disabled>重新选点</button>
+            <span class="tower-hint" id="rectifyPointHint">已选 0 / 4</span>
+          </div>
+          <div id="rectifyStage" style="display:none;flex:1;flex-direction:column;min-height:0">
+            <div class="tower-wrap" style="flex:1;min-height:0"><canvas id="rectifyCanvas"></canvas></div>
+            <div style="display:flex;gap:10px;margin-top:12px;align-items:center;flex:none">
+              <button class="btn" id="rectifyRunBtn" disabled>校正并分析</button>
+              <span class="tower-hint">按 左上 → 右上 → 右下 → 左下 顺序点选地面参考点</span>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">校正结果 <span class="sub" id="rectifyMeta">等待执行</span></div>
+          <div class="placeholder" id="rectifyPlaceholder" style="min-height:230px;flex:1">
+            <div class="big">📐</div>
+            <div>载入图像并完成标定后，这里显示校正前后对比</div>
+          </div>
+          <div id="rectifyResult" style="display:none"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 · 分区自动分割（独立页） ================= -->
+    <section class="view" id="view-zoning">
+      <div class="split" style="grid-template-columns:380px 1fr;grid-template-rows:minmax(0,1fr)">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card" style="flex:none">
+            <div class="card-title">分区控制 <span class="sub">植被掩膜连通域 · 空间聚类</span></div>
+            <div style="margin:12px 0 6px;font-size:16.5px;font-weight:600;color:var(--ink-2)">分区数量：<span id="zoningPlotsVal" style="color:var(--ink)">3 区</span></div>
+            <input type="range" id="zoningPlots" min="2" max="6" step="1" value="3">
+            <div class="note" style="font-size:14.5px;color:var(--ink-3);margin:6px 0 14px">A/B/C… 管理分区，用于分区级草情台账与轮牧安排</div>
+            <div id="zoningPick">
+              <div class="dropzone" id="zoningDrop">
+                <div class="t1">上传草场照片</div>
+                <div class="t2">或点「载入样例」体验自动分区</div>
+              </div>
+            </div>
+            <input type="file" id="zoningFile" accept="image/*" hidden>
+            <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
+              <button class="btn small" id="zoningSampleBtn">载入样例</button>
+              <button class="btn" id="zoningRunBtn" disabled>开始自动分割</button>
+            </div>
+          </div>
+          <div class="card" style="flex:1;min-height:0">
+            <div class="card-title">分区与草场台账 <span class="sub">编号口径</span></div>
+            <div class="note" style="font-size:13.5px;line-height:1.5;color:var(--ink-2)">
+              分区编号 A/B/C… 与草场分析页的分区照片编号（如 P1-A-01）同口径：
+              每个管理分区用编号照片跟踪覆盖度变化，构成分区级草情台账；
+              轮牧安排按分区轮换休牧。分区由算法自动划分，顺序按质心从左到右编号。
+            </div>
+          </div>
+        </div>
+        <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">分割结果 <span class="sub" id="zoningMeta">等待执行</span></div>
+          <div class="placeholder" id="zoningPlaceholder" style="min-height:260px;flex:1">
+            <div class="big">🧩</div>
+            <div>上传草场照片后自动划分管理分区（A/B/C…）并给出分区覆盖度</div>
+          </div>
+          <div id="zoningResult" style="display:none;flex-direction:column;gap:14px;flex:1;min-height:0"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 · 覆盖度预测（独立页） ================= -->
+    <section class="view" id="view-forecast">
+      <div class="split" style="grid-template-columns:1fr 330px;grid-template-rows:minmax(0,1fr)">
+        <div class="card" style="display:flex;flex-direction:column">
+          <div class="card-title">覆盖度趋势 · 实测 + 预测 <span class="sub" id="fcSub"></span></div>
+          <div style="display:flex;gap:10px;align-items:center;margin:12px 0 6px;flex-wrap:wrap">
+            <span style="font-size:15.5px;color:var(--ink-2);font-weight:600">草场：</span>
+            <div id="fcPastures" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;margin:6px 0 10px">
+            <span style="font-size:15.5px;color:var(--ink-2);font-weight:600">预测步长：</span>
+            <div class="mode-row" id="fcHorizon">
+              <button class="mode-btn active" data-days="7">7 天</button>
+              <button class="mode-btn" data-days="3">3 天</button>
+              <button class="mode-btn" data-days="14">14 天</button>
+              <button class="mode-btn" data-days="30">30 天</button>
+            </div>
+          </div>
+          <div id="forecastChart" style="flex:1;min-height:320px"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card" style="flex:none">
+            <div class="card-title">预测指标 <span class="sub">Holt 线性趋势</span></div>
+            <div class="fc-rows">
+              <div class="fc-row"><span>当前覆盖度</span><b id="fcCurrent">—</b></div>
+              <div class="fc-row"><span>预测期末值</span><b id="fcTail">—</b></div>
+              <div class="fc-row"><span>日均变化</span><b id="fcTrend">—</b></div>
+              <div class="fc-row"><span>残差标准差</span><b id="fcResidual">—</b></div>
+            </div>
+            <div class="fc-risk" id="fcRisk" style="display:none"></div>
+          </div>
+          <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+            <div class="card-title">未来预测值</div>
+            <div id="fcValues" class="fc-values"><div class="fc-val-row"><span>—</span></div></div>
+          </div>
+          <div class="card" style="flex:none">
+            <div class="card-title">方法 <span class="sub">确定性</span></div>
+            <div class="note" style="font-size:15.5px;line-height:1.55">
+              Holt 线性趋势外推（α=0.5, β=0.3，手写实现零依赖）；置信带 =
+              1.96 × 残差标准差 × √步长（越远期越宽）；预测值按覆盖度物理
+              边界截断到 [0,1]。定位为趋势预警辅助，不替代实测。
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 · 多模态评分（独立页） ================= -->
+    <section class="view" id="view-health">
+      <div class="card" style="flex:none">
+        <div class="card-title">各草场多模态草情评分 <span class="sub">覆盖度 60% · 绿度 15% · 环境 25%（缺失自动归一）</span></div>
+        <div class="health-grid" id="healthGrid"></div>
+      </div>
+      <div class="split" style="grid-template-columns:1fr 380px;flex:1.8;grid-template-rows:minmax(0,1fr)">
+        <div class="card" style="display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">贡献分解 <span class="sub" id="healthDetailSub">点击上方草场卡片查看</span></div>
+          <div id="healthDetail" style="flex:1;min-height:0;overflow-y:auto"></div>
+        </div>
+        <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">当前环境 <span class="sub">温湿度适宜度</span></div>
+          <div class="fc-rows">
+            <div class="fc-row"><span>温度</span><b id="healthTemp">—</b></div>
+            <div class="fc-row"><span>湿度</span><b id="healthHumidity">—</b></div>
+            <div class="fc-row"><span>适宜度口径</span><b style="font-size:15.5px;color:var(--ink-2)">12–25℃ · 35–75%</b></div>
+          </div>
+          <div class="note" style="font-size:13.5px;line-height:1.5;color:var(--ink-3);margin-top:auto;border-top:1px solid rgba(0,0,0,0.07);padding-top:10px">
+            环境分 = 温湿度适宜度 × 100：温度 12–25℃ 与湿度 35–75% 区间内满分，越界线性递减。
+          </div>
+        </div>
+      </div>
+      <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+        <div class="card-title">评分对比 <span class="sub">按告警等级着色</span></div>
+        <div id="healthCompareChart" style="flex:1;min-height:120px"></div>
+        <div class="note" id="healthWeightNote" style="font-size:13.5px;line-height:1.5;color:var(--ink-2);overflow-y:auto;flex:none;border-top:1px solid rgba(0,0,0,0.07);padding-top:6px">
+          权重：覆盖度 <b>60%</b>（满产参照同载畜量口径）· 绿度 <b>15%</b>（GLI）·
+          环境 <b>25%</b>（温湿度适宜度）。缺失模态自动按剩余权重归一化并在贡献分解中如实标注；
+          等级随覆盖度阈值（全站口径），评分不改变告警判定。
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 4 · AI 助手 ================= -->
+    <section class="view" id="view-agent">
+      <div class="agent-split" style="grid-template-columns: 324px 1.25fr 1fr">
+        <div class="card" style="display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">历史对话 <span class="sub" id="histCount"></span></div>
+          <div class="hist-list" id="historyList" style="flex:1;max-height:none"><div class="hist-empty">暂无历史对话</div></div>
+          <div class="dec-block" style="flex:none">
+            <h4>说明</h4>
+            <div class="rotation-text">每次问答（含思考过程）自动保存到服务端；点击任一条可回放当时的思考流与决策——概览页「Agent 决策流」点击同样跳转到这里。</div>
+          </div>
+        </div>
+
+        <div class="card agent-left">
+          <div class="card-title">向 AI 助手提问 <span class="sub">大模型驱动的牧场决策</span></div>
+          <div class="ask-row">
+            <input id="agentInput" placeholder="例如：东区草场现在草够吗？能放多少只羊？" autocomplete="off">
+            <button class="btn" id="agentSend">发送</button>
+          </div>
+          <div class="quick-row">
+            <button class="sample-btn" data-q="东区草场现在草够吗？能放多少只羊？">草够吗·能放多少羊</button>
+            <button class="sample-btn" data-q="今天羊群数量是多少？">羊群数量</button>
+            <button class="sample-btn" data-q="草地退化风险如何？该怎么处理？">退化风险</button>
+            <button class="sample-btn" data-q="东区草场当前覆盖度是多少？">当前覆盖度</button>
+            <button class="sample-btn" data-q="现在建议载畜量是多少？">建议载畜量</button>
+            <button class="sample-btn" data-q="草场需要轮牧吗？给个轮牧方案">轮牧方案</button>
+            <button class="sample-btn" data-q="最近一周草场情况怎么样？">近期草情</button>
+            <button class="sample-btn" data-q="羊群数量最近有什么变化？">羊群变化</button>
+            <button class="sample-btn" data-q="如果覆盖度持续下降该怎么办？">覆盖度下降</button>
+            <button class="sample-btn" data-q="现在适合放牧吗？">适合放牧吗</button>
+            <button class="sample-btn" data-q="亩产500公斤、100亩草场、放牧30天，能放多少羊？">参数试算</button>
+            <button class="sample-btn" data-q="帮我看看东区牧场整体草情">整体草情</button>
+            <button class="sample-btn" data-q="羊群密度是否过大？">羊群密度</button>
+          </div>
+          <div id="stream"><div class="empty">⚡ 大模型思考过程将实时滚动显示在这里 —— 提问后可见工具调用、数据回传与决策生成全过程。</div></div>
+        </div>
+
+        <div class="card" id="decisionCard" style="display:flex;flex-direction:column;min-height:0;overflow-y:auto">
+          <div class="card-title">决策结果 <span class="sub">结构化 JSON</span></div>
+          <div class="placeholder" id="decisionPlaceholder">
+            <div class="big">🧭</div>
+            <div>提问后显示告警等级、建议载畜量与措施</div>
+          </div>
+          <div id="decisionBody" style="display:none">
+            <span class="alert-badge normal" id="decAlert">—</span>
+            <div class="stocking-line">建议载畜量<b id="decStocking">0</b>羊单位</div>
+            <div class="dec-block"><h4>建议措施</h4><ul id="decActions"></ul></div>
+            <div class="dec-block"><h4>轮牧方案</h4><div class="rotation-text" id="decRotation">—</div></div>
+            <div class="dec-block evidence"><h4>决策依据</h4><ul id="decEvidence"></ul></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 · 巡检告警（独立页） ================= -->
+    <section class="view" id="view-patrol">
+      <div class="card" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="card-title">巡检告警 <span class="sub">逐场巡检 · SSE 实时推送 + 5 秒轮询兜底</span></div>
+        <div style="display:flex;gap:12px;align-items:center;margin:12px 0 14px;flex-wrap:wrap">
+          <button class="btn" id="patrolPageRunBtn">立即巡检</button>
+          <div id="patrolPageResult" style="flex:1;min-width:300px"></div>
+        </div>
+        <div id="patrolAlertList" class="palert-list"></div>
+      </div>
+      <div class="card" style="flex:none">
+        <div class="card-title">巡检口径</div>
+        <div class="note" style="font-size:15.5px;line-height:1.55">
+          巡检单位是草场：一轮巡检逐场独立检测（各场编号照片聚合），冷却与升级判定
+          按本场历史互不影响；「升级必发、同级冷却抑制、降级发恢复通知」为确定性
+          纯函数规则（阈值与全站唯一口径一致）；告警经 SSE 实时推送 + 5 秒轮询兜底。
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 · 设备台账（方案选型，规划阶段） ================= -->
+    <section class="view" id="view-devices">
+      <div class="card" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="card-title">硬件方案选型台账 <span class="sub">与报告书硬件章节同口径 · 规划阶段</span></div>
+        <div class="device-list" id="deviceList"></div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 · 用户管理（账号与角色） ================= -->
+    <section class="view" id="view-users">
+      <div class="split" style="grid-template-columns:420px 1fr;grid-template-rows:minmax(0,1fr)">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card" style="flex:none">
+            <div class="card-title">当前账号 <span class="sub" id="usersRoleSub"></span></div>
+            <div style="display:flex;align-items:center;gap:16px;margin-top:12px">
+              <span class="avatar" id="usersAvatar" style="width:60px;height:60px;font-size:28px">A</span>
+              <div>
+                <div style="font-size:23px;font-weight:700" id="usersName">—</div>
+                <div style="font-size:15px;color:var(--ink-3)">角色：<span class="role-tag" id="usersRoleTag">—</span></div>
+              </div>
+            </div>
+            <div class="fc-rows" style="margin-top:16px">
+              <div class="fc-row"><span>登录状态</span><b style="font-size:16.5px;color:var(--green-deep)">已登录</b></div>
+              <div class="fc-row"><span>令牌有效期</span><b style="font-size:16.5px">12 小时（可配）</b></div>
+            </div>
+          </div>
+          <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0" id="userCreateCard">
+            <div class="card-title">新增账号 <span class="sub">仅管理员可操作</span></div>
+            <div class="login-field" style="margin:10px 0 8px">
+              <label for="nuName">用户名</label>
+              <input id="nuName" placeholder="字母/数字/下划线，2–32 位" autocomplete="off">
+            </div>
+            <div class="login-field" style="margin-bottom:8px">
+              <label for="nuPass">初始密码</label>
+              <input id="nuPass" type="password" placeholder="至少 6 位" autocomplete="new-password">
+            </div>
+            <div class="login-field" style="margin-bottom:10px">
+              <label>角色</label>
+              <div class="mode-row" id="nuRole">
+                <button class="mode-btn" data-role="admin">管理员</button>
+                <button class="mode-btn active" data-role="herder">放牧员</button>
+                <button class="mode-btn" data-role="ranger">巡护员</button>
+              </div>
+            </div>
+            <button class="btn" id="nuCreateBtn" style="flex:none">创建账号</button>
+            <div class="login-msg" id="nuMsg" style="min-height:20px;margin-top:10px;text-align:left"></div>
+          </div>
+        </div>
+        <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">账号列表 <span class="sub" id="userListMeta">—</span></div>
+          <div class="user-list" id="userList" style="flex:1;min-height:0;overflow-y:auto;margin-top:10px"></div>
+          <div class="note" style="font-size:14px;line-height:1.55;border-top:1px solid rgba(0,0,0,0.07);padding-top:10px;flex:none">
+            口令只存 <b>PBKDF2 加盐哈希</b>（任何接口不回显）；账号在服务端 users 表维护，
+            首次启动用 .env 凭据播种管理员。<b>角色权限</b>：本阶段控制「账号管理」入口
+            （仅管理员），按角色的菜单与数据权限（RBAC）规划中。退出登录仅本地清除令牌
+            （无状态设计，服务端不做吊销）；删除账号后其登录态在下次校验时失效。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 视图 · 系统设置（运行时配置，只读） ================= -->
+    <section class="view" id="view-settings">
+      <div class="split" style="grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr">
+        <div class="card" style="display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">应用与阈值</div>
+          <div class="set-rows" id="setApp"></div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">巡检与视觉</div>
+          <div class="set-rows" id="setVision"></div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">大模型与视频口径</div>
+          <div class="set-rows" id="setLLM"></div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;min-height:0">
+          <div class="card-title">数据存储 <span class="sub">SQLite · 实时统计</span></div>
+          <div class="set-rows" id="setStorage" style="flex:1;min-height:0;overflow-y:auto"></div>
+          <div class="note" style="font-size:13.5px;line-height:1.5;color:var(--ink-3);flex:none;border-top:1px solid rgba(0,0,0,0.07);padding-top:10px">
+            配置来自服务端 .env（只读展示，修改后重启生效）；本页不暴露任何密钥与数据库路径。
+            数据为本地 SQLite，演示数据首次启动自动播种。
+          </div>
+        </div>
+      </div>
+    </section>
+      </main>
+
+      <div class="footline">
+        <span>数据每 30 秒自动刷新 · Agent 思考流实时推送（SSE）</span>
+        <span id="lastUpdate">上次更新：—</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastHost"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ============ 1920×1080 等比缩放 ============
+  var stage = document.getElementById("stage");
+  function resize() {
+    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    stage.style.transform = "scale(" + s + ")";
+    stage.style.left = (window.innerWidth - 1920 * s) / 2 + "px";
+    stage.style.top = (window.innerHeight - 1080 * s) / 2 + "px";
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  // ============ 时钟 ============
+  function tick() {
+    var now = new Date(), p = function (n) { return String(n).padStart(2, "0"); };
+    document.getElementById("clock").textContent =
+      p(now.getHours()) + ":" + p(now.getMinutes()) + ":" + p(now.getSeconds());
+  }
+  tick(); setInterval(tick, 1000);
+
+  // ============ 工具函数 ============
+  function $(id) { return document.getElementById(id); }
+  function fmtTime(iso) {  // ISO(UTC) → 本地 HH:mm
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d)) return iso.slice(5, 16).replace("T", " ");
+    var p = function (n) { return String(n).padStart(2, "0"); };
+    return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function fmtDay(iso) { var d = new Date(iso); return isNaN(d) ? iso.slice(5, 10) : (d.getMonth() + 1) + "-" + d.getDate(); }
+  function countUp(el, target, decimals, suffix) {
+    var from = parseFloat(el.dataset.v || "0") || 0;
+    if (target == null || isNaN(target)) { el.textContent = "—"; return; }
+    var t0 = performance.now(), dur = 650;
+    (function step(t) {
+      var k = Math.min((t - t0) / dur, 1), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = (from + (target - from) * e).toFixed(decimals) + (suffix || "");
+      if (k < 1) requestAnimationFrame(step); else el.dataset.v = target;
+    })(t0);
+  }
+  var ALERT_LABEL = { normal: "正常", warning: "预警", danger: "危险" };
+
+  // ============ 登录鉴权（令牌注入 / 登录屏 / 启动门） ============
+  var AUTH_KEY = "myt_token";
+  var booted = false;
+  var overviewTimer = 0, alertTimer = 0, alertSource = null;
+
+  function authToken() { try { return localStorage.getItem(AUTH_KEY) || ""; } catch (e) { return ""; } }
+  function setToken(t) { try { localStorage.setItem(AUTH_KEY, t); } catch (e) {} }
+  function clearToken() { try { localStorage.removeItem(AUTH_KEY); } catch (e) {} }
+  function setUserName(name) {
+    var n = name || "admin";
+    if ($("userName")) $("userName").textContent = n;
+    if ($("userAvatar")) $("userAvatar").textContent = (n.charAt(0) || "A").toUpperCase();
+  }
+
+  // 全局 fetch 包装：/api/* 自动带 Authorization；401 → 回登录屏。
+  // 只读 resp.status、原样返回 resp（Agent 思考流要 resp.body.getReader()，绝不能碰 body）；
+  // 非 /api 请求（样例图 / 视频 / assets）一律不接管。
+  var nativeFetch = window.fetch.bind(window);
+  window.fetch = function patchedFetch(input, init) {
+    var url = typeof input === "string" ? input : "";
+    if (url.indexOf("/api/") !== 0) return nativeFetch(input, init);
+    var opts = Object.assign({}, init || {});
+    var headers = new Headers(opts.headers || {});
+    var t = authToken();
+    if (t) headers.set("Authorization", "Bearer " + t);
+    opts.headers = headers;  // 不预设 Content-Type：multipart 边界交给浏览器
+    return nativeFetch(url, opts).then(function (resp) {
+      if (resp.status === 401 && url.indexOf("/api/auth/login") < 0) handleUnauthorized();
+      return resp;
+    });
+  };
+
+  function handleUnauthorized() {
+    clearToken();
+    if (alertSource) { try { alertSource.close(); } catch (e) {} alertSource = null; }
+    clearInterval(overviewTimer); clearInterval(alertTimer);
+    showLogin("登录已过期，请重新登录");
+  }
+
+  function showLogin(msg) {
+    stage.style.visibility = "hidden";
+    $("loginScreen").hidden = false;
+    $("loginMsg").textContent = msg || "";
+  }
+
+  /** 登录成功后进入驾驶舱（只跑一次：轮询 / SSE / 初始数据全部在这里启动） */
+  function startApp() {
+    if (booted) return;
+    booted = true;
+    stage.style.visibility = "visible";
+    $("loginScreen").hidden = true;
+    var initial = location.hash ? location.hash.slice(1) : "";
+    switchView(Object.prototype.hasOwnProperty.call(PAGES, initial) ? initial : "overview");
+    loadOverview().catch(function (e) { console.warn("概览加载失败", e); });
+    loadCharts();
+    loadPastures(false).catch(function (e) { console.warn("草场加载失败", e); });
+    loadHistory();
+    loadAlerts();
+    connectAlertStream();
+    overviewTimer = setInterval(function () { loadOverview().catch(function () {}); loadCharts(); }, 30000);
+    alertTimer = setInterval(loadAlerts, 5000);  // 轮询兜底（SSE 断线也能看到告警）
+  }
+
+  function doLogin() {
+    var btn = $("loginBtn");
+    if (btn.disabled) return;
+    btn.disabled = true;
+    $("loginMsg").textContent = "";
+    nativeFetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: $("loginUser").value.trim(), password: $("loginPass").value })
+    }).then(function (r) {
+      return r.json().then(function (b) { return { s: r.status, b: b }; });
+    }).then(function (x) {
+      if (x.s !== 200 || !x.b || x.b.code !== 0) throw new Error((x.b && x.b.message) || ("HTTP " + x.s));
+      setToken(x.b.data.token);
+      setUserName(x.b.data.username);
+      $("loginPass").value = "";
+      startApp();
+    }).catch(function (e) {
+      var card = document.querySelector(".login-card");
+      $("loginMsg").textContent = "登录失败：" + e.message;
+      if (card) { card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake"); }
+    }).finally(function () { btn.disabled = false; });
+  }
+  $("loginBtn").addEventListener("click", doLogin);
+  $("loginUser").addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
+  $("loginPass").addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
+
+  $("logoutBtn").addEventListener("click", function () {
+    if (!confirm("确认退出登录？")) return;
+    clearToken();
+    if (alertSource) { try { alertSource.close(); } catch (e) {} alertSource = null; }
+    location.replace(location.pathname);  // 整页重载，状态最干净；无令牌时启动门会回登录屏
+  });
+
+  // ============ 页面注册表与视图切换 ============
+  var PAGES = {
+    overview: { title: "总览界面", sub: "牧场状态 · 告警 · 决策流" },
+    sheep: { title: "羊群识别", sub: "图片 / 视频智能计数" },
+    grass: { title: "草场分析", sub: "多草场 · 分区编号照片" },
+    rectify: { title: "塔基几何校正", sub: "四点标定 · 单应变换 → 正射视图" },
+    zoning: { title: "分区自动分割", sub: "掩膜连通域 · 空间聚类" },
+    forecast: { title: "覆盖度预测", sub: "Holt 趋势 + 置信带" },
+    health: { title: "多模态评分", sub: "覆盖度 · 绿度 · 环境融合" },
+    agent: { title: "AI 助手", sub: "大模型驱动的牧场决策" },
+    patrol: { title: "巡检告警", sub: "逐场巡检 · SSE 实时推送" },
+    devices: { title: "设备台账", sub: "硬件方案选型（规划阶段 · 如实标注）" },
+    users: { title: "用户管理", sub: "账号与权限（多用户规划中）" },
+    settings: { title: "系统设置", sub: "运行时配置 · 只读" }
+  };
+  var currentView = "overview";
+  function switchView(name) {
+    if (!Object.prototype.hasOwnProperty.call(PAGES, name)) return;
+    currentView = name;
+    document.querySelectorAll(".view").forEach(function (v) {
+      v.classList.toggle("active", v.id === "view-" + name);
+    });
+    document.querySelectorAll(".menu-item").forEach(function (t) {
+      t.classList.toggle("active", t.dataset.view === name);
+    });
+    var meta = PAGES[name];
+    $("pageTitle").textContent = meta.title;
+    $("pageSub").textContent = meta.sub;
+    if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+    if (name === "grass") loadPastures(true).catch(function () {});  // 进入草场分析时刷新草场数据
+    if (meta.onShow) meta.onShow();   // 页面级惰性初始化/刷新（已切换为 active，容器有尺寸）
+    setTimeout(function () {
+      Object.keys(charts).forEach(function (k) { if (charts[k]) charts[k].resize(); });
+    }, 300);
+  }
+  $("menu").addEventListener("click", function (e) {
+    var item = e.target.closest(".menu-item");
+    if (item) switchView(item.dataset.view);
+  });
+  bindRowKeyboard($("menu"));
+  // 地址栏改 hash / 浏览器后退前进 → 视图跟随
+  window.addEventListener("hashchange", function () {
+    var name = (location.hash || "").slice(1);
+    if (Object.prototype.hasOwnProperty.call(PAGES, name) && name !== currentView) switchView(name);
+  });
+  // 初始路由在 startApp()（登录后）执行：见文件尾部 boot()
+
+  // ============ ECharts 通用风格（Apple 系） ============
+  var charts = {};
+  var AX = {
+    axisLine: { show: false },
+    axisTick: { show: false },
+    axisLabel: { color: "#86868b", fontSize: 13, fontFamily: "-apple-system, PingFang SC, Microsoft YaHei" },
+    splitLine: { lineStyle: { color: "rgba(0,0,0,0.06)", type: "dashed" } }
+  };
+  var TOOLTIP = {
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderColor: "rgba(0,0,0,0.06)",
+    borderWidth: 1,
+    padding: [10, 14],
+    textStyle: { color: "#1d1d1f", fontSize: 14, fontFamily: "-apple-system, PingFang SC, Microsoft YaHei" },
+    extraCssText: "border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,0.12);"
+  };
+  function areaGrad(color) {
+    return { type: "linear", x: 0, y: 0, x2: 0, y2: 1,
+      colorStops: [{ offset: 0, color: color + "55" }, { offset: 1, color: color + "00" }] };
+  }
+  function chart(id) {
+    var el = $(id);
+    if (!window.echarts) { el.innerHTML = '<div style="color:#86868b;text-align:center;padding-top:60px">图表库加载失败（npmmirror / jsdelivr 不可达）</div>'; return null; }
+    if (!charts[id]) charts[id] = echarts.init(el);
+    return charts[id];
+  }
+
+  // ============ 概览：数据加载 ============
+  var LEVEL_COLOR = { normal: "#34c759", warning: "#ff9500", danger: "#ff3b30" };
+
+  /** hero 逐场状态：编号 · 覆盖度 · 等级（草场彼此独立，不给跨草场平均；点击跳到该草场） */
+  function renderHeroPastures(ov) {
+    var host = $("heroPastures");
+    var list = ov.pastures || [];
+    if (!list.length) {
+      host.innerHTML = '<span class="chip glass">暂无草场数据</span>';
+      $("heroText").textContent = "";
+      return;
+    }
+    host.innerHTML = list.map(function (p) {
+      var lv = p.alert_level || "normal";
+      var cov = p.coverage == null ? "未分析" : (p.coverage * 100).toFixed(1) + "%";
+      return '<span class="chip glass hero-chip" role="button" tabindex="0" data-code="' + escapeHtml(p.code) + '" title="查看该草场详情">' +
+        '<i style="background:' + (LEVEL_COLOR[lv] || LEVEL_COLOR.normal) + '"></i>' +
+        escapeHtml(p.code) + " " + escapeHtml(p.name || "") + " · " + cov + " " + (ALERT_LABEL[lv] || lv) +
+        "</span>";
+    }).join("");
+    host.querySelectorAll(".hero-chip").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var code = chip.dataset.code;
+        var target = pasturesCache.filter(function (p) { return p.code === code; })[0];
+        switchView("grass");
+        loadPastures(true).then(function () {
+          if (target) selectPasture(target.id);
+        }).catch(function () {});
+      });
+    });
+    var worst = ov.alert_pasture;
+    $("heroText").textContent = list.length + " 个草场 · 各自独立监测与判定" +
+      (worst && ov.alert_level !== "normal" ? " · 最严重：" + worst.code + " " + worst.name : "");
+  }
+
+  function renderKpis(ov) {
+    countUp($("kpiSheep"), ov.sheep_count, 0);
+
+    // 草场数量：各草场独立监测（跨草场不做覆盖度平均）
+    var list = ov.pastures || [];
+    countUp($("kpiPastures"), list.length, 0);
+    var counts = { normal: 0, warning: 0, danger: 0 };
+    list.forEach(function (p) {
+      if (p.coverage == null) return;
+      counts[p.alert_level || "normal"] = (counts[p.alert_level || "normal"] || 0) + 1;
+    });
+    $("kpiPasturesFoot").textContent = list.length
+      ? "各自独立 · " + counts.danger + " 危险 · " + counts.warning + " 预警 · " + counts.normal + " 正常"
+      : "暂无草场";
+
+    // 告警等级：各草场独立判定后取最严重（不是覆盖度平均值判定）
+    var level = ov.alert_level || "normal";
+    $("kpiAlert").textContent = ov.alert_level == null ? "—" : ALERT_LABEL[level];
+    $("kpiAlertCard").className = "card kpi hoverable" + (level === "danger" ? " accent-danger" : level === "warning" ? " accent-warning" : " accent-normal");
+    $("kpiAlertFoot").textContent = ov.alert_pasture
+      ? "最严重：" + ov.alert_pasture.code + " " + ov.alert_pasture.name
+      : "各草场独立判定 · 取最严重";
+    renderHeroPastures(ov);
+
+    countUp($("kpiStocking"), ov.recommended_stocking, 0);
+  }
+
+  function renderEnv(rows) {
+    var c = chart("envChart"); if (!c) return;
+    if (!rows.length) { c.clear(); c.setOption({ title: { text: "暂无数据", left: "center", top: "middle", textStyle: { color: "#86868b" } } }); return; }
+    c.setOption({
+      tooltip: Object.assign({ trigger: "axis", axisPointer: { type: "cross", label: { backgroundColor: "#1d1d1f" } } }, TOOLTIP),
+      legend: { data: ["温度", "湿度"], right: 6, top: 0, icon: "roundRect", itemWidth: 14, itemHeight: 4, textStyle: { color: "#6e6e73", fontSize: 14 } },
+      grid: { left: 46, right: 50, top: 36, bottom: 46 },
+      xAxis: Object.assign({}, AX, { type: "category", boundaryGap: false, data: rows.map(function (r) { return fmtTime(r.created_at); }) }),
+      yAxis: [
+        Object.assign({}, AX, { type: "value", name: "℃", min: 0, max: 40, nameTextStyle: { color: "#86868b" } }),
+        Object.assign({}, AX, { type: "value", name: "%", min: 0, max: 100, nameTextStyle: { color: "#86868b" } })
+      ],
+      dataZoom: [{ type: "slider", height: 16, bottom: 8, borderColor: "transparent", backgroundColor: "rgba(0,0,0,0.04)", fillerColor: "rgba(0,113,227,0.12)", handleStyle: { color: "#fff", borderColor: "rgba(0,0,0,0.2)" }, start: 0, end: 100 }],
+      series: [
+        { name: "温度", type: "line", smooth: true, symbol: "none", data: rows.map(function (r) { return r.temperature; }),
+          lineStyle: { color: "#ff9500", width: 2.5 }, areaStyle: { color: areaGrad("#ff9500") } },
+        { name: "湿度", type: "line", smooth: true, symbol: "none", yAxisIndex: 1, data: rows.map(function (r) { return r.humidity; }),
+          lineStyle: { color: "#0071e3", width: 2.5, type: "dashed" } }
+      ]
+    });
+  }
+
+  /** 覆盖度趋势图选项：实测 + 预测虚线 + 堆叠置信带（草场详情与预测独立页共用） */
+  function buildTrendOption(data, opts) {
+    var series = data.series || [];
+    var fc = data.forecast;
+    var compact = !!(opts && opts.compact);
+    var history = series.map(function (r) { return r.coverage; });
+    var days = series.map(function (r) { return fmtDay(r.day); });
+    var pad = function (n) { return Array(n).fill(null); };
+    var chartSeries = [{
+      name: "实测", type: "line", smooth: true, symbol: "none", data: history,
+      lineStyle: { color: "#34c759", width: 2.5 }, areaStyle: { color: areaGrad("#34c759") },
+      markLine: { silent: true, symbol: "none",
+        label: { color: "#86868b", fontSize: compact ? 11 : 12, position: "insideEndTop" },
+        data: [
+          { yAxis: 0.60, lineStyle: { color: "#34c759", type: "dashed", width: 1.2 }, label: { formatter: "正常线 60%" } },
+          { yAxis: 0.35, lineStyle: { color: "#ff3b30", type: "dashed", width: 1.2 }, label: { formatter: "危险线 35%" } }
+        ] }
+    }];
+    if (fc) {
+      days = days.concat(fc.days);
+      chartSeries.push(
+        { name: "预测", type: "line", smooth: true, symbol: "none", z: 3,
+          data: pad(history.length).concat(fc.values),
+          lineStyle: { color: "#0071e3", width: 2, type: "dashed" } },
+        { name: "置信上界", type: "line", symbol: "none", silent: true, stack: "fcBand", z: 1,
+          data: pad(history.length).concat(fc.values.map(function (v, i) { return v + fc.band[i]; })),
+          lineStyle: { opacity: 0 }, areaStyle: { color: "rgba(0, 113, 227, 0.13)" } },
+        { name: "置信下界", type: "line", symbol: "none", silent: true, stack: "fcBand", z: 1,
+          data: pad(history.length).concat(fc.values.map(function (v, i) { return v - fc.band[i]; })),
+          lineStyle: { opacity: 0 } }
+      );
+    }
+    return {
+      tooltip: Object.assign({ trigger: "axis", valueFormatter: function (v) { return (v * 100).toFixed(1) + "%"; } }, TOOLTIP),
+      legend: fc ? { data: ["实测", "预测"], right: 6, top: 0, icon: "roundRect", itemWidth: 14, itemHeight: 4, textStyle: { color: "#6e6e73", fontSize: compact ? 12 : 13 } } : undefined,
+      grid: { left: 46, right: 16, top: fc ? (compact ? 26 : 34) : 14, bottom: 26 },
+      xAxis: Object.assign({}, AX, { type: "category", boundaryGap: false, data: days }),
+      yAxis: Object.assign({}, AX, { type: "value", min: 0, max: 1,
+        axisLabel: Object.assign({}, AX.axisLabel, { formatter: function (v) { return (v * 100).toFixed(0) + "%"; } }) }),
+      series: chartSeries
+    };
+  }
+
+  /** 当前草场的按日覆盖度趋势（多草场管理：趋势按草场口径） */
+  function renderPastureTrend(data) {
+    var c = chart("covChart"); if (!c) return;
+    var series = data.series || [];
+    if (!series.length) {
+      c.clear();
+      c.setOption({ title: { text: "暂无数据", left: "center", top: "middle", textStyle: { color: "#86868b" } } });
+      $("covSub").textContent = "";
+      return;
+    }
+    var last = series[series.length - 1];
+    var fc = data.forecast;
+    $("covSub").textContent = data.pasture.code + " · 最新 " + (last.coverage * 100).toFixed(1) + "%" +
+      (fc ? " · " + fc.days.length + " 天预测 " + (fc.values[fc.values.length - 1] * 100).toFixed(1) + "%" : "");
+    c.setOption(buildTrendOption(data, { compact: true }), true);
+  }
+
+  function renderSheepTrend(rows) {
+    var c = chart("sheepChart"); if (!c) return;
+    if (!rows.length) { c.clear(); c.setOption({ title: { text: "暂无数据", left: "center", top: "middle", textStyle: { color: "#86868b" } } }); return; }
+    var vals = rows.map(function (r) { return r.count; });
+    var avg = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    $("sheepSub").textContent = "均值 " + avg.toFixed(0) + " · 峰值 " + Math.max.apply(null, vals);
+    c.setOption({
+      tooltip: Object.assign({ trigger: "axis" }, TOOLTIP),
+      grid: { left: 40, right: 16, top: 14, bottom: 26 },
+      xAxis: Object.assign({}, AX, { type: "category", data: rows.map(function (r) { return fmtDay(r.created_at); }) }),
+      yAxis: Object.assign({}, AX, { type: "value", minInterval: 1 }),
+      series: [{
+        type: "bar", data: vals, barMaxWidth: 16,
+        itemStyle: { borderRadius: [6, 6, 0, 0],
+          color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [{ offset: 0, color: "#34c759" }, { offset: 1, color: "rgba(52,199,89,0.25)" }] } }
+      }]
+    });
+  }
+
+  function renderFlow(logs) {
+    var el = $("flowList");
+    $("flowCount").textContent = logs.length ? "共 " + logs.length + " 条" : "";
+    if (!logs.length) { el.innerHTML = '<div class="flow-empty">暂无决策记录</div>'; return; }
+    // 每条可点击：跳转到 AI 助手视图回放该次问答的思考过程与决策
+    el.innerHTML = logs.slice().reverse().map(function (log) {
+      var lv = log.alert_level || "normal";
+      var tools = (log.tool_calls || []).map(function (t) { return "<span>" + t + "</span>"; }).join("");
+      return '<div class="flow-item clickable ' + lv + '" role="button" tabindex="0" data-log-id="' + log.id + '"><div class="node"></div>' +
+        '<div class="q">' + escapeHtml(log.question || "") + "</div>" +
+        '<div class="meta">' + fmtTime(log.created_at) +
+        '<span class="chip ' + lv + '" style="font-size:15px;padding:1px 10px">' + ALERT_LABEL[lv] + "</span>" +
+        (tools ? '<span class="tools">' + tools + "</span>" : "") + "</div></div>";
+    }).join("");
+  }
+
+  /** 历史记录列表（羊群识别 / 草场分析共用；最新在前，最多 8 条） */
+  function renderSheepHistory(rows) {
+    var el = $("sheepHistory");
+    if (!rows.length) { el.innerHTML = '<div class="hist-empty">暂无识别记录</div>'; return; }
+    el.innerHTML = rows.slice(-8).reverse().map(function (r) {
+      var sheep = r.per_class && r.per_class.sheep != null ? r.per_class.sheep : r.count;
+      return '<div class="hist-row"><span class="t">' + fmtTime(r.created_at) + "</span>" +
+        '<span class="v">' + sheep + " 只</span>" +
+        (r.region ? "<span>" + r.region + "</span>" : "") + "</div>";
+    }).join("");
+  }
+  var overviewCache = null;
+  function loadOverview() {
+    return fetch("/api/dashboard/overview").then(function (r) { return r.json(); }).then(function (b) {
+      if (b.code !== 0) throw new Error(b.message);
+      overviewCache = b.data;
+      renderKpis(b.data);
+      $("lastUpdate").textContent = "上次更新：" + new Date().toLocaleTimeString("zh-CN");
+      return b.data;
+    });
+  }
+  function loadCharts() {
+    fetch("/api/dashboard/environment?limit=48").then(function (r) { return r.json(); })
+      .then(function (b) { if (b.code === 0) renderEnv(b.data.records); });
+    fetch("/api/dashboard/trends?days=30").then(function (r) { return r.json(); })
+      .then(function (b) {
+        if (b.code === 0) {
+          renderSheepTrend(b.data.sheep);
+          renderSheepHistory(b.data.sheep);
+        }
+      });
+    fetch("/api/dashboard/decision-flow?limit=10").then(function (r) { return r.json(); })
+      .then(function (b) { if (b.code === 0) renderFlow(b.data.logs); });
+  }
+  // 概览/图表轮询在 startApp() 中启动（登录后才开始拉数据）
+
+  // ============ 通用：上传分析 ============
+  /** 键盘可达（Apple HIG）：可点行上的 Enter / Space 等同点击 */
+  function bindRowKeyboard(container) {
+    if (!container) return;
+    container.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var row = e.target.closest('[role="button"]');
+      if (!row || !container.contains(row)) return;
+      e.preventDefault();   // Space 不滚页
+      row.click();
+    });
+  }
+  bindRowKeyboard($("heroPastures"));
+  bindRowKeyboard($("flowList"));
+  bindRowKeyboard($("pastureList"));
+  bindRowKeyboard($("historyList"));
+
+  function bindUpload(dropId, inputId, handler) {
+    var drop = $(dropId), input = $(inputId);
+    drop.addEventListener("click", function () { input.click(); });
+    input.addEventListener("change", function () { if (input.files[0]) handler(input.files[0]); input.value = ""; });
+    ["dragover", "dragenter"].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+    });
+    ["dragleave", "drop"].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+    });
+    drop.addEventListener("drop", function (e) {
+      var f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) handler(f);
+    });
+  }
+  function uploadTo(url, file) {
+    var fd = new FormData();
+    fd.append("file", file, file.name || "upload.jpg");
+    return fetch(url, { method: "POST", body: fd }).then(function (r) { return r.json(); });
+  }
+  function useSampleAsFile(src, name) {
+    return fetch(src).then(function (r) { return r.blob(); })
+      .then(function (blob) { return new File([blob], name, { type: blob.type || "image/jpeg" }); });
+  }
+
+  // ============ 视图 2 · 羊群识别（图片计数 / 视频计数） ============
+  var sheepMode = "image";
+  var videoState = { playing: false, timer: null, previews: [], images: [], current: 0 };
+
+  function setSheepMode(mode) {
+    sheepMode = mode;
+    document.querySelectorAll("#sheepModeRow .mode-btn").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.mode === mode);
+    });
+    var isVideo = mode === "video";
+    $("sheepModeHint").textContent = isVideo ? "视频计数 · 跟踪 + 越线" : "图片计数";
+    $("sheepDropTitle").textContent = isVideo ? "拖拽视频到此处" : "拖拽图片到此处";
+    $("sheepDropHint").textContent = isVideo
+      ? "或点击选择文件（MP4 / AVI · ≤15 秒）"
+      : "或点击选择文件（JPG / PNG）";
+    $("sheepFile").setAttribute("accept", isVideo ? "video/*" : "image/*");
+    $("sheepSamplesImage").style.display = isVideo ? "none" : "";
+    $("sheepSamplesVideo").style.display = isVideo ? "" : "none";
+    $("sheepHelp").textContent = isVideo
+      ? "YOLO11 检测 + ByteTrack 跟踪（scipy 匹配，无运行时安装）+ 越线统计（每 ID 每方向只计一次）；后端返回标注帧序列，前端逐帧播放、数字同步跳动。"
+      : "YOLO11 羊专用权重（ICAERUS 开源，GPU 加速推理）+ 跟踪去重计数；自动绘制检测框并入库。";
+    stopVideo();
+    $("sheepResult").style.display = "none";
+    $("videoResult").style.display = "none";
+    $("sheepHistBlock").style.display = isVideo ? "none" : "flex";  // 视频模式下收起图片识别记录
+    $("sheepPlaceholder").style.display = "flex";
+    $("sheepPlaceholder").innerHTML = isVideo
+      ? '<div class="big">🎞️</div><div>上传视频后逐帧播放，并显示计数与进出统计</div>'
+      : '<div class="big">🐑</div><div>上传图片后，这里将显示羊群数量与标注图</div>';
+  }
+
+  function onSheepFile(file) {
+    if (sheepMode === "video") runSheepVideo(file, file.name);
+    else runSheepCount(file);
+  }
+
+  // ---------- 视频计数：上传 → 逐帧结果 → canvas 播放 ----------
+  function runSheepVideo(file, name) {
+    stopVideo();
+    $("sheepPlaceholder").style.display = "none";
+    $("sheepResult").style.display = "none";
+    $("sheepHistBlock").style.display = "none";
+    $("videoResult").style.display = "flex";
+    $("sheepMeta").textContent = (name || "视频") + " · 逐帧检测中…";
+    $("videoNote").textContent = "正在逐帧检测与跟踪（GPU 推理，素材越长耗时越久）…";
+    var fd = new FormData();
+    fd.append("file", file, file.name || "video.mp4");
+    fetch("/api/vision/count-video", { method: "POST", body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (b) {
+        if (b.code !== 0) throw new Error(b.message);
+        renderVideoResult(b.data, name || file.name);
+      })
+      .catch(function (e) {
+        $("sheepMeta").textContent = "";
+        $("videoNote").textContent = "视频处理失败：" + e.message;
+      });
+  }
+
+  function renderVideoResult(d, name) {
+    $("sheepMeta").textContent = name + " · " + d.processed_frames + " 帧已分析";
+    countUp($("vsMax"), d.max_simultaneous, 0);
+    countUp($("vsUnique"), d.unique_count, 0);
+    $("vsFlow").textContent = d.inbound + " / " + d.outbound + " / " + d.net;
+    $("videoNote").textContent =
+      "同帧最大并发 = 单帧内跟踪确认的目标数上限（对 ID 切换免疫，作为「这群有多少只」的主指标）；" +
+      "累计出现过 = 不同 track ID 数（跟丢重连会偏大）；进/出/净为越线统计（每只羊每方向只计一次）。" +
+      "共 " + d.total_frames + " 帧（步长 " + d.stride + " · " + d.fps + " fps）。";
+    var c = chart("videoChart");
+    if (c) {
+      c.setOption({
+        tooltip: Object.assign({ trigger: "axis" }, TOOLTIP),
+        grid: { left: 42, right: 16, top: 12, bottom: 26 },
+        xAxis: Object.assign({}, AX, {
+          type: "category", name: "帧", nameTextStyle: { color: "#86868b" },
+          data: d.frames.map(function (f) { return f.frame_index; })
+        }),
+        yAxis: Object.assign({}, AX, { type: "value", minInterval: 1 }),
+        series: [{
+          type: "line", step: "middle", symbol: "none",
+          data: d.frames.map(function (f) { return f.count; }),
+          lineStyle: { color: "#34c759", width: 2 }, areaStyle: { color: areaGrad("#34c759") }
+        }]
+      }, true);
+    }
+    setupVideoPlayer(d);
+  }
+
+  function setupVideoPlayer(d) {
+    videoState.previews = d.frames.filter(function (f) { return f.preview_jpeg; });
+    videoState.current = 0;
+    var canvas = $("videoCanvas");
+    canvas.width = d.width || 960;
+    canvas.height = d.height || 540;
+    var seek = $("videoSeek");
+    seek.max = Math.max(0, videoState.previews.length - 1);
+    seek.value = 0;
+    videoState.images = videoState.previews.map(function (f) {
+      var img = new Image();
+      img.src = "data:image/jpeg;base64," + f.preview_jpeg;
+      return img;
+    });
+    showVideoFrame(0);
+  }
+
+  function showVideoFrame(index) {
+    var previews = videoState.previews;
+    if (!previews.length) return;
+    index = Math.max(0, Math.min(index, previews.length - 1));
+    videoState.current = index;
+    var canvas = $("videoCanvas");
+    var ctx = canvas.getContext("2d");
+    var img = videoState.images[index];
+    var paint = function () {
+      ctx.fillStyle = "#10140f";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (img) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    if (img && img.complete) paint();
+    else if (img) img.onload = paint;
+
+    var frame = previews[index];
+    $("vsNow").textContent = frame.count;
+    $("vsFlow").textContent = frame.inbound + " / " + frame.outbound + " / " + frame.net;
+    $("videoPos").textContent = (index + 1) + " / " + previews.length + "（第 " + frame.frame_index + " 帧）";
+    $("videoSeek").value = index;
+  }
+
+  function toggleVideo() {
+    if (videoState.playing) { stopVideo(); return; }
+    if (!videoState.previews.length) return;
+    videoState.playing = true;
+    $("videoPlay").textContent = "⏸ 暂停";
+    videoState.timer = setInterval(function () {
+      var next = videoState.current + 1;
+      if (next >= videoState.previews.length) { stopVideo(); return; }
+      showVideoFrame(next);
+    }, 120);
+  }
+
+  function stopVideo() {
+    videoState.playing = false;
+    if (videoState.timer) { clearInterval(videoState.timer); videoState.timer = null; }
+    var btn = $("videoPlay");
+    if (btn) btn.textContent = "▶ 播放";
+  }
+
+  $("sheepModeRow").addEventListener("click", function (e) {
+    var btn = e.target.closest(".mode-btn");
+    if (btn) setSheepMode(btn.dataset.mode);
+  });
+  $("videoPlay").addEventListener("click", toggleVideo);
+  $("videoSeek").addEventListener("input", function () {
+    stopVideo();
+    showVideoFrame(Number(this.value));
+  });
+
+  bindUpload("sheepDrop", "sheepFile", onSheepFile);
+  document.querySelectorAll("#sheepSamplesImage .sample-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var src = btn.dataset.src;
+      useSampleAsFile(src, src.split("/").pop()).then(runSheepCount);
+    });
+  });
+  document.querySelectorAll("#sheepSamplesVideo .sample-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var url = btn.dataset.video;
+      btn.disabled = true;
+      fetch(url).then(function (r) { return r.blob(); })
+        .then(function (blob) {
+          var name = url.split("/").pop();
+          return runSheepVideo(new File([blob], name, { type: blob.type || "video/mp4" }), name);
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+  });
+  function runSheepCount(file) {
+    $("sheepPlaceholder").style.display = "none";
+    $("sheepResult").style.display = "block";
+    $("sheepResult").innerHTML = '<div class="placeholder"><div class="spinner"></div><div>YOLO11 检测中…</div></div>';
+    $("sheepMeta").textContent = file.name;
+    var t0 = performance.now();
+    uploadTo("/api/vision/count", file).then(function (b) {
+      if (b.code !== 0) throw new Error(b.message);
+      var d = b.data, secs = ((performance.now() - t0) / 1000).toFixed(2);
+      var per = Object.keys(d.per_class || {}).map(function (k) { return k + " " + d.per_class[k]; }).join("，");
+      $("sheepResult").innerHTML =
+        '<div class="result-flex">' +
+          '<div class="result-left">' +
+            '<div class="result-hero"><span class="num" id="sheepCount">0</span><span class="unit">只羊</span></div>' +
+            '<div class="result-meta">耗时 ' + secs + 's · ' + (per || "-") + ' · 已入库</div>' +
+          '</div>' +
+          '<div class="result-imgbox"><img class="annotated" id="sheepImg" alt="检测标注图"></div>' +
+        '</div>';
+      countUp($("sheepCount"), d.count, 0);
+      $("sheepImg").src = "data:image/jpeg;base64," + d.annotated_image;
+      loadCharts();  // 趋势与历史记录同步刷新
+    }).catch(function (e) {
+      $("sheepResult").innerHTML = '<div class="placeholder"><div class="big">⚠️</div><div>识别失败：' + e.message + "</div></div>";
+    });
+  }
+
+  // ============ 快捷入口（草场分析页 → 四个能力独立页） ============
+  $("quickEntry").addEventListener("click", function (e) {
+    var btn = e.target.closest(".qe-btn");
+    if (btn) switchView(btn.dataset.goto);
+  });
+  bindRowKeyboard($("quickEntry"));
+
+  // ============ 塔基几何校正（独立页） ============
+  var towerState = { file: null, img: null, points: [], busy: false };
+  // 内置斜拍样例的地面四边形（归一化；由 scripts/make_tower_sample.py 生成时输出）
+  var TOWER_SAMPLE_QUAD = [[0.34, 0.10], [0.66, 0.13], [0.96, 0.87], [0.04, 0.85]];
+
+  function setTowerStep(n) {
+    ["rectStep1", "rectStep2", "rectStep3"].forEach(function (id, i) {
+      $(id).classList.toggle("on", i < n);
+    });
+  }
+
+  function drawTowerCanvas() {
+    var c = $("rectifyCanvas");
+    if (!c || !towerState.img) return;
+    var ctx = c.getContext("2d");
+    var img = towerState.img;
+    var scale = Math.min(c.width / img.width, c.height / img.height);
+    var dw = img.width * scale, dh = img.height * scale;
+    var ox = (c.width - dw) / 2, oy = (c.height - dh) / 2;
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, ox, oy, dw, dh);
+    var pts = towerState.points.map(function (p) { return [ox + p[0] * dw, oy + p[1] * dh]; });
+    if (pts.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      pts.slice(1).forEach(function (p) { ctx.lineTo(p[0], p[1]); });
+      if (pts.length === 4) ctx.closePath();
+      ctx.strokeStyle = "#ffd60a"; ctx.lineWidth = 2.5; ctx.stroke();
+    }
+    pts.forEach(function (p, i) {
+      ctx.beginPath(); ctx.arc(p[0], p[1], 9, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffd60a"; ctx.fill();
+      ctx.strokeStyle = "#10140f"; ctx.lineWidth = 2.5; ctx.stroke();
+      ctx.fillStyle = "#10140f"; ctx.font = "bold 12px sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(String(i + 1), p[0], p[1] + 0.5);
+    });
+  }
+
+  function resetTowerPoints() {
+    towerState.points = [];
+    $("rectifyPointHint").textContent = "已选 0 / 4";
+    $("rectifyRunBtn").disabled = true;
+    $("rectifyResult").style.display = "none";
+    $("rectifyPlaceholder").style.display = "";
+    $("rectifyMeta").textContent = "等待执行";
+    setTowerStep(towerState.img ? 2 : 1);
+    drawTowerCanvas();
+  }
+
+  function loadTowerImage(file, onReady) {
+    towerState.file = file;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        towerState.img = img;
+        $("rectifyCanvas").width = 840;   // 画布内部分辨率（显示尺寸由 CSS 铺满）
+        $("rectifyCanvas").height = 540;
+        $("rectifyPick").style.display = "none";
+        $("rectifyStage").style.display = "flex";
+        $("rectifyResetBtn").disabled = false;
+        resetTowerPoints();
+        if (onReady) onReady();
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  bindUpload("rectifyDrop", "rectifyFile", function (file) { loadTowerImage(file); });
+
+  $("rectifySampleBtn").addEventListener("click", function () {
+    // ?v= 为样例版本号：重新生成样例后 +1，绕开浏览器已缓存的旧图
+    useSampleAsFile("assets/samples/tower_oblique.jpg?v=2", "tower_oblique.jpg").then(function (file) {
+      loadTowerImage(file, function () {
+        towerState.points = TOWER_SAMPLE_QUAD.map(function (p) { return p.slice(); });
+        $("rectifyPointHint").textContent = "已选 4 / 4（样例内置地面四边形）";
+        $("rectifyRunBtn").disabled = false;
+        setTowerStep(3);
+        drawTowerCanvas();
+      });
+    }).catch(function (e) { alert("样例载入失败：" + e.message); });
+  });
+
+  $("rectifyCanvas").addEventListener("click", function (e) {
+    if (towerState.points.length >= 4 || !towerState.img) return;
+    var c = $("rectifyCanvas");
+    var rect = c.getBoundingClientRect();
+    var img = towerState.img;
+    var scale = Math.min(c.width / img.width, c.height / img.height);
+    var dw = img.width * scale, dh = img.height * scale;
+    var ox = (c.width - dw) / 2, oy = (c.height - dh) / 2;
+    var x = (e.clientX - rect.left) * (c.width / rect.width);   // CSS 尺寸 → 画布分辨率
+    var y = (e.clientY - rect.top) * (c.height / rect.height);
+    var nx = (x - ox) / dw, ny = (y - oy) / dh;
+    if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;   // 落在图外不记录
+    towerState.points.push([+nx.toFixed(4), +ny.toFixed(4)]);
+    $("rectifyPointHint").textContent = "已选 " + towerState.points.length + " / 4";
+    $("rectifyRunBtn").disabled = towerState.points.length !== 4;
+    if (towerState.points.length === 4) setTowerStep(3);
+    drawTowerCanvas();
+  });
+
+  $("rectifyResetBtn").addEventListener("click", resetTowerPoints);
+
+  $("rectifyRunBtn").addEventListener("click", function () {
+    if (towerState.points.length !== 4 || towerState.busy) return;
+    towerState.busy = true;
+    var btn = this;
+    btn.disabled = true;
+    var fd = new FormData();
+    fd.append("file", towerState.file, towerState.file.name || "tower.jpg");
+    fd.append("points", JSON.stringify(towerState.points));
+    fetch("/api/vision/orthorectify", { method: "POST", body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (b) {
+        if (b.code !== 0) throw new Error(b.message);
+        var d = b.data;
+        var matrixText = (d.matrix || []).map(function (row) {
+          return row.map(function (v) { return (+v).toFixed(4); }).join("  ");
+        }).join("\n");
+        $("rectifyPlaceholder").style.display = "none";
+        $("rectifyResult").style.display = "flex";
+        $("rectifyResult").className = "tower-result";
+        $("rectifyMeta").textContent = "重投影误差 " + d.reprojection_error + " px";
+        $("rectifyResult").innerHTML =
+          '<img src="data:image/jpeg;base64,' + d.corrected_image + '" alt="校正后正射图">' +
+          '<div class="cov-cmp">' +
+          '<div class="cov-row"><span class="cov-lbl">校正前</span><div class="bar-bg"><div class="bar-fill before" style="width:' + Math.min(d.coverage_before * 100, 100) + '%"></div></div><b>' + pctText(d.coverage_before) + "</b></div>" +
+          '<div class="cov-row"><span class="cov-lbl">校正后</span><div class="bar-bg"><div class="bar-fill after" style="width:' + Math.min(d.coverage_after * 100, 100) + '%"></div></div><b>' + pctText(d.coverage_after) + "</b></div>" +
+          "</div>" +
+          '<div class="rows">' +
+          "<div>绿度：校正前 <b>" + d.greenness_before.toFixed(3) + "</b> → 校正后 <b>" + d.greenness_after.toFixed(3) + "</b></div>" +
+          '<div style="color:var(--ink-3);font-size:15px">四点标定 → 单应矩阵 H（3×3）→ 正射视图，消除透视压缩</div>' +
+          "</div>" +
+          '<div><div class="cov-lbl" style="width:auto;margin-bottom:6px">单应矩阵 H</div><pre class="h-matrix">' + matrixText + "</pre></div>";
+      })
+      .catch(function (e) { alert("校正失败：" + e.message); })
+      .finally(function () { towerState.busy = false; btn.disabled = towerState.points.length !== 4; });
+  });
+
+  // ============ 分区自动分割（独立页） ============
+  var zoningState = { file: null, img: null, busy: false };
+
+  $("zoningPlots").addEventListener("input", function () {
+    $("zoningPlotsVal").textContent = this.value + " 区";
+  });
+
+  function loadZoningImage(file) {
+    zoningState.file = file;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        zoningState.img = img;
+        $("zoningPick").style.display = "none";
+        $("zoningRunBtn").disabled = false;
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  bindUpload("zoningDrop", "zoningFile", loadZoningImage);
+
+  $("zoningSampleBtn").addEventListener("click", function () {
+    useSampleAsFile("/samples/mauron_example1.JPG", "mauron_example1.JPG").then(loadZoningImage)
+      .catch(function (e) { alert("样例载入失败：" + e.message); });
+  });
+
+  $("zoningRunBtn").addEventListener("click", function () {
+    if (zoningState.busy) return;
+    zoningState.busy = true;
+    var btn = this;
+    btn.disabled = true;
+    var fd = new FormData();
+    fd.append("file", zoningState.file, zoningState.file.name || "grass.jpg");
+    fd.append("n_plots", $("zoningPlots").value);
+    fetch("/api/vision/segment", { method: "POST", body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (b) {
+        if (b.code !== 0) throw new Error(b.message);
+        var d = b.data;
+        var plots = d.plots || [];
+        var totalArea = plots.reduce(function (s, p) { return s + (p.area || 0); }, 0) || 1;
+        $("zoningPlaceholder").style.display = "none";
+        $("zoningResult").style.display = "flex";
+        $("zoningMeta").textContent = plots.length + " 个分区 · 全图植被占比 " + pctText(d.mask_ratio);
+        var cards = plots.map(function (p) {
+          var ratio = totalArea ? (p.area / totalArea) : 0;
+          return '<div class="zone-card">' +
+            '<div class="zone-head"><span class="zone-code">' + p.code + '</span><b>' + pctText(p.coverage) + "</b></div>" +
+            '<div class="bar-bg"><div class="bar-fill after" style="width:' + Math.min(p.coverage * 100, 100) + '%"></div></div>' +
+            '<div class="zone-sub">面积占比 ' + (ratio * 100).toFixed(1) + "% · " + p.bbox[2] + "×" + p.bbox[3] + " px</div>" +
+            "</div>";
+        }).join("");
+        var requested = Number($("zoningPlots").value) || 3;
+        $("zoningResult").innerHTML =
+          (d.annotated_image ? '<img class="annotated" src="data:image/jpeg;base64,' + d.annotated_image + '" alt="分区叠加图">' : "") +
+          '<div class="zone-grid">' + cards + "</div>" +
+          '<div style="color:var(--ink-3);font-size:15px">植被掩膜 → 连通域 → 空间聚类（' + plots.length + " 个管理分区，有效草斑 " + d.n_components + " 个" +
+          (plots.length < requested ? "；植被连通域不足目标分区数，按实际划分" : "") + "）</div>";
+      })
+      .catch(function (e) { alert("分割失败：" + e.message); })
+      .finally(function () { zoningState.busy = false; btn.disabled = false; });
+  });
+
+  // ============ 覆盖度预测（独立页） ============
+  var fcState = { pastureId: null, horizon: 7, loaded: false };
+
+  function renderForecastChart(data) {
+    var c = chart("forecastChart");
+    var series = data.series || [];
+    var fc = data.forecast;
+    if (!c) return;
+    if (!series.length) {
+      c.clear();
+      c.setOption({ title: { text: "暂无数据", left: "center", top: "middle", textStyle: { color: "#86868b" } } });
+      return;
+    }
+    c.setOption(buildTrendOption(data, { compact: false }), true);
+
+    // 指标卡
+    var last = series[series.length - 1];
+    $("fcCurrent").textContent = pctText(last.coverage);
+    var tail = fc && fc.values.length ? fc.values[fc.values.length - 1] : null;
+    $("fcTail").textContent = tail == null ? "—" : pctText(tail);
+    $("fcTrend").textContent = fc
+      ? (fc.trend > 0 ? "+" : "") + (fc.trend * 100).toFixed(3) + " %/日"
+      : "—";
+    $("fcResidual").textContent = fc ? (fc.residual_std * 100).toFixed(2) + " %" : "—";
+
+    // 未来预测值列表
+    $("fcValues").innerHTML = fc
+      ? fc.days.map(function (day, i) {
+          return '<div class="fc-val-row"><span>' + day + '</span><b>' + pctText(fc.values[i]) + "</b></div>";
+        }).join("")
+      : '<div class="fc-val-row"><span>无预测</span></div>';
+
+    // 风险提示：预测值触及阈值（趋势预警参考，不触发告警判定）
+    var risk = null;
+    if (fc) {
+      fc.values.forEach(function (v) {
+        if (v < 0.35) risk = "danger";
+        else if (v < 0.60 && risk !== "danger") risk = "warning";
+      });
+    }
+    var riskEl = $("fcRisk");
+    if (risk) {
+      riskEl.style.display = "block";
+      riskEl.className = "fc-risk " + risk;
+      riskEl.textContent = risk === "danger"
+        ? "⚠ 预测值将触及 35% 危险线——建议提前轮牧减压（趋势预警仅供参考，不触发告警判定）"
+        : "⚠ 预测值将低于 60% 正常线——建议关注放牧强度（趋势预警仅供参考，不触发告警判定）";
+    } else {
+      riskEl.style.display = "none";
+    }
+  }
+
+  function loadForecast() {
+    if (!fcState.pastureId) return;
+    var id = fcState.pastureId;
+    fetch("/api/pastures/" + id + "/trend?days=30&forecast_days=" + fcState.horizon)
+      .then(function (r) { return r.json(); })
+      .then(function (b) {
+        if (b.code !== 0) throw new Error(b.message);
+        renderForecastChart(b.data);
+        var p = b.data.pasture || {};
+        $("fcSub").textContent = (p.code || "") + " " + (p.name || "") +
+          " · 30 天实测 + " + fcState.horizon + " 天预测";
+      })
+      .catch(function (e) { console.warn("预测加载失败", e); });
+  }
+
+  function initForecast() {
+    if (fcState.loaded) { loadForecast(); return; }
+    fcState.loaded = true;
+    $("fcPastures").addEventListener("click", function (e) {
+      var btn = e.target.closest(".sample-btn");
+      if (!btn) return;
+      fcState.pastureId = Number(btn.dataset.fcPasture);
+      document.querySelectorAll("#fcPastures .sample-btn").forEach(function (b) {
+        b.classList.toggle("active", b === btn);
+      });
+      loadForecast();
+    });
+    $("fcHorizon").addEventListener("click", function (e) {
+      var btn = e.target.closest(".mode-btn");
+      if (!btn) return;
+      fcState.horizon = Number(btn.dataset.days);
+      document.querySelectorAll("#fcHorizon .mode-btn").forEach(function (b) {
+        b.classList.toggle("active", b === btn);
+      });
+      loadForecast();
+    });
+    apiJSON("/api/pastures").then(function (data) {
+      var pastures = (data && data.pastures) || [];
+      $("fcPastures").innerHTML = pastures.map(function (p) {
+        return '<button class="sample-btn" data-fc-pasture="' + p.id + '" role="button" tabindex="0">' +
+          p.code + " " + escapeHtml(p.name) + "</button>";
+      }).join("");
+      if (!fcState.pastureId && pastures.length) {
+        fcState.pastureId = pastures[0].id;
+        document.querySelector("#fcPastures .sample-btn").classList.add("active");
+        loadForecast();
+      }
+    }).catch(function (e) { console.warn("草场清单加载失败", e); });
+  }
+  PAGES.forecast.onShow = function () { initForecast(); };
+
+  // ============ 多模态评分（独立页） ============
+  var healthState = { loaded: false, pastures: [], selected: null };
+  var HEALTH_WEIGHTS = { coverage: 0.6, greenness: 0.15, environment: 0.25 };
+  var HEALTH_LABEL = { coverage: "覆盖度", greenness: "绿度", environment: "环境" };
+  var HEALTH_COLORS = { normal: "#34c759", warning: "#ff9500", danger: "#ff3b30" };
+
+  function renderHealthCards() {
+    var grid = $("healthGrid");
+    grid.innerHTML = healthState.pastures.map(function (p) {
+      var h = p.health || {};
+      if (h.score == null) return "";
+      var level = h.level || "normal";
+      var bars = Object.keys(HEALTH_WEIGHTS).map(function (k) {
+        var v = h.contributions ? h.contributions[k] : null;
+        if (v == null) {
+          return '<div class="hbar"><span>' + HEALTH_LABEL[k] + '</span><div class="bar-bg"><div class="bar-fill missing" style="width:0"></div></div><b>缺失</b></div>';
+        }
+        return '<div class="hbar"><span>' + HEALTH_LABEL[k] + '</span><div class="bar-bg"><div class="bar-fill after" style="width:' + Math.min(v, 100) + '%"></div></div><b>' + Math.round(v) + "</b></div>";
+      }).join("");
+      return '<div class="hcard' + (healthState.selected === p.id ? " on" : "") + '" data-hp="' + p.id + '" role="button" tabindex="0">' +
+        '<div class="hcard-top"><span class="hcard-name">' + escapeHtml(p.code + " " + p.name) + '</span><span class="chip ' + level + '">' + ALERT_LABEL[level] + "</span></div>" +
+        '<div class="hcard-score">' + h.score + "<small>/100</small></div>" +
+        bars +
+        "</div>";
+    }).join("") || '<div class="hist-empty">暂无已分析草场</div>';
+  }
+
+  function renderHealthDetail() {
+    var host = $("healthDetail");
+    var p = healthState.pastures.filter(function (x) { return x.id === healthState.selected; })[0];
+    if (!p) {
+      host.innerHTML = '<div class="placeholder" style="min-height:180px"><div class="big">💚</div><div>点击上方草场卡片查看评分构成</div></div>';
+      return;
+    }
+    var h = p.health || {};
+    var activeWeight = Object.keys(HEALTH_WEIGHTS).filter(function (k) {
+      return h.contributions && h.contributions[k] != null;
+    }).reduce(function (s, k) { return s + HEALTH_WEIGHTS[k]; }, 0);
+    $("healthDetailSub").textContent = p.code + " " + p.name + " · 综合 " + (h.score != null ? h.score : "—") + "/100";
+    var rows = Object.keys(HEALTH_WEIGHTS).map(function (k) {
+      var v = h.contributions ? h.contributions[k] : null;
+      var nominal = (HEALTH_WEIGHTS[k] * 100).toFixed(0);
+      var effective = activeWeight ? (HEALTH_WEIGHTS[k] / activeWeight * 100).toFixed(1) : "—";
+      return '<div class="hdetail-row">' +
+        '<div class="hbar"><span>' + HEALTH_LABEL[k] + '</span><div class="bar-bg"><div class="bar-fill after" style="width:' + (v == null ? 0 : Math.min(v, 100)) + '%"></div></div><b>' + (v == null ? "缺失" : Math.round(v)) + "</b></div>" +
+        '<div class="hdetail-meta">权重 ' + nominal + "%" + (Number(effective) !== Number(nominal) ? "（归一化后 " + effective + "%）" : "") + (v == null ? " · 未采集" : "") + "</div>" +
+        "</div>";
+    }).join("");
+    host.innerHTML = rows +
+      (h.missing && h.missing.length
+        ? '<div class="note" style="margin-top:10px;font-size:14.5px;color:#b25000">缺失模态：' +
+          h.missing.map(function (k) { return HEALTH_LABEL[k]; }).join("、") +
+          "——已按剩余权重归一化（如实展示，不虚构数据）</div>"
+        : "");
+  }
+
+  function renderHealthCompare() {
+    var c = chart("healthCompareChart");
+    if (!c) return;
+    var items = healthState.pastures.filter(function (p) { return p.health && p.health.score != null; });
+    if (!items.length) { c.clear(); return; }
+    c.setOption({
+      tooltip: Object.assign({ trigger: "axis", axisPointer: { type: "shadow" } }, TOOLTIP),
+      grid: { left: 46, right: 16, top: 30, bottom: 26 },
+      xAxis: Object.assign({}, AX, { type: "category", data: items.map(function (p) { return p.code + " " + p.name; }) }),
+      yAxis: Object.assign({}, AX, { type: "value", min: 0, max: 100 }),
+      series: [{
+        type: "bar", barWidth: 46, name: "综合评分",
+        data: items.map(function (p) { return p.health.score; }),
+        itemStyle: {
+          borderRadius: [8, 8, 0, 0],
+          color: function (params) { return HEALTH_COLORS[items[params.dataIndex].health.level] || "#34c759"; }
+        },
+        label: { show: true, position: "top", fontSize: 13, color: "#6e6e73", formatter: "{c}" }
+      }]
+    }, true);
+  }
+
+  function loadHealth() {
+    return apiJSON("/api/pastures").then(function (data) {
+      healthState.pastures = data.pastures || [];
+      if (!healthState.selected && healthState.pastures.length) {
+        healthState.selected = healthState.pastures[0].id;
+      }
+      renderHealthCards();
+      renderHealthDetail();
+      renderHealthCompare();
+    });
+  }
+
+  function initHealth() {
+    if (healthState.loaded) { loadHealth(); return; }
+    healthState.loaded = true;
+    $("healthGrid").addEventListener("click", function (e) {
+      var card = e.target.closest(".hcard");
+      if (!card) return;
+      healthState.selected = Number(card.dataset.hp);
+      renderHealthCards();
+      renderHealthDetail();
+    });
+    bindRowKeyboard($("healthGrid"));
+    fetch("/api/dashboard/environment?limit=1").then(function (r) { return r.json(); }).then(function (b) {
+      if (b.code !== 0 || !b.data.records.length) return;
+      var rec = b.data.records[b.data.records.length - 1];
+      $("healthTemp").textContent = rec.temperature.toFixed(1) + " ℃";
+      $("healthHumidity").textContent = rec.humidity.toFixed(1) + " %";
+    }).catch(function () {});
+    loadHealth();
+  }
+  PAGES.health.onShow = initHealth;
+
+  // ============ 巡检告警（独立页：全量表格，与概览面板同一数据源） ============
+  function renderPatrolTable(list) {
+    var host = $("patrolAlertList");
+    if (!host) return;
+    if (!list.length) {
+      host.innerHTML = '<div class="palert-empty">暂无告警记录——点击「立即巡检」逐场检测各草场</div>';
+      return;
+    }
+    host.innerHTML = list.map(function (a) {
+      var lv = a.level || "normal";
+      var cov = a.metrics && a.metrics.coverage != null ? pctText(a.metrics.coverage) : "—";
+      return '<div class="palert-row">' +
+        '<span class="chip ' + lv + '">' + ALERT_LABEL[lv] + "</span>" +
+        '<span class="pa-title">' + escapeHtml(a.title || "") + "</span>" +
+        '<span class="pa-cov">覆盖度 ' + cov + "</span>" +
+        '<span class="pa-when">' + fmtTime(a.created_at) + "</span>" +
+        (a.acknowledged
+          ? '<button class="mini-btn" disabled>已知悉</button>'
+          : '<button class="mini-btn" data-ack="' + a.id + '">已知悉</button>') +
+        '<span class="pa-msg">' + escapeHtml(a.message || "") + "</span>" +
+        "</div>";
+    }).join("");
+  }
+  $("patrolAlertList").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-ack]");
+    if (btn) acknowledgeAlert(Number(btn.dataset.ack), btn);
+  });
+  $("patrolPageRunBtn").addEventListener("click", function () { runPatrolNow(this); });
+  PAGES.patrol.onShow = function () { loadAlerts(); };
+
+  // ============ 设备台账（硬件方案选型，规划阶段如实标注） ============
+  var DEVICES = [
+    { icon: "📷", name: "塔基球机摄像头", model: "400 万像素以上球机（海康/大华，POE + 4G 可选）",
+      role: "塔基俯拍草场，支持变焦与预置位，按固定时间点拍照上传", status: "待接入", ok: false },
+    { icon: "🧠", name: "边缘计算盒", model: "Jetson Orin Nano / RK3588 工控盒",
+      role: "本地推理：羊群检测 + 覆盖度快速判定（对应「本地快速检测」）", status: "待接入", ok: false },
+    { icon: "☀️", name: "太阳能供电", model: "太阳能板 + 磷酸铁锂电池 + MPPT 控制器",
+      role: "野外无市电场景的长期供电", status: "待接入", ok: false },
+    { icon: "📶", name: "通信回传", model: "4G/5G DTU（或铁塔既有光纤）",
+      role: "边缘端与云端平台的数据同步", status: "待接入", ok: false },
+    { icon: "🌡️", name: "环境传感器", model: "温湿度 SHT30 + 土壤墒情（RS485）",
+      role: "多模态融合草情评分的环境数据源", status: "待接入", ok: false },
+    { icon: "☁️", name: "云端平台", model: "FastAPI 平台 + GLM 大模型（本项目）",
+      role: "深度分析、趋势预测、多模态评分、巡检告警（对应「云端深度分析」）", status: "运行中", ok: true }
+  ];
+  $("deviceList").innerHTML = DEVICES.map(function (d) {
+    return '<div class="device-row">' +
+      '<div class="device-icon">' + d.icon + "</div>" +
+      '<div><div class="device-name">' + d.name + '</div><div class="device-model">' + d.model + "</div></div>" +
+      '<div class="device-role">' + d.role + "</div>" +
+      '<span class="chip ' + (d.ok ? "normal" : "warning") + '">' + d.status + "</span>" +
+      "</div>";
+  }).join("");
+
+  // ============ 用户管理（账号列表 / 新增 / 重置密码 / 删除，管理员专属） ============
+  var usersState = { me: null, loaded: false };
+  var ROLE_LABEL = { admin: "管理员", herder: "放牧员", ranger: "巡护员" };
+
+  function renderUserList(users) {
+    var isAdmin = usersState.me && usersState.me.role === "admin";
+    $("userListMeta").textContent = users.length + " 个账号" + (isAdmin ? "" : "（只读：当前角色非管理员）");
+    $("userList").innerHTML = users.map(function (u) {
+      var mine = usersState.me && u.username === usersState.me.username;
+      return '<div class="user-row">' +
+        '<span class="avatar" style="width:30px;height:30px;font-size:14px">' + escapeHtml((u.username.charAt(0) || "?").toUpperCase()) + "</span>" +
+        '<span class="u-name">' + escapeHtml(u.username) + (mine ? "（我）" : "") + "</span>" +
+        '<span class="role-tag ' + u.role + '">' + escapeHtml(u.role_label) + "</span>" +
+        '<span class="u-when">创建于 ' + fmtTime(u.created_at) + "</span>" +
+        (isAdmin && !mine
+          ? '<span class="u-ops">' +
+            '<button class="mini-btn" data-reset="' + u.id + '" data-name="' + escapeHtml(u.username) + '">重置密码</button>' +
+            '<button class="mini-btn" data-del-user="' + u.id + '" data-name="' + escapeHtml(u.username) + '">删除</button>' +
+            "</span>"
+          : "") +
+        "</div>";
+    }).join("");
+  }
+
+  function loadUsers() {
+    fetch("/api/auth/me").then(function (r) { return r.json(); }).then(function (b) {
+      if (b.code !== 0 || !b.data) return;
+      usersState.me = b.data;
+      var name = b.data.username || "admin", role = b.data.role || "admin";
+      $("usersName").textContent = name;
+      $("usersAvatar").textContent = (name.charAt(0) || "A").toUpperCase();
+      $("usersRoleTag").textContent = ROLE_LABEL[role] || role;
+      $("usersRoleTag").className = "role-tag " + role;
+      $("usersRoleSub").textContent = ROLE_LABEL[role] || role;
+      $("userCreateCard").style.display = role === "admin" ? "flex" : "none";
+    }).catch(function () {});
+    fetch("/api/users").then(function (r) { return r.json(); }).then(function (b) {
+      if (b.code !== 0) {  // 非管理员：如实展示无权限与只读列表入口
+        $("userListMeta").textContent = "无账号管理权限（" + (b.message || "") + "）";
+        $("userList").innerHTML = '<div class="palert-empty">当前角色非管理员，账号列表仅管理员可见</div>';
+        return;
+      }
+      renderUserList(b.data.users);
+    }).catch(function (e) { console.warn("账号列表加载失败", e); });
+  }
+
+  function createUser() {
+    var btn = $("nuCreateBtn");
+    var name = $("nuName").value.trim(), pass = $("nuPass").value;
+    var roleBtn = document.querySelector("#nuRole .mode-btn.active");
+    var role = roleBtn ? roleBtn.dataset.role : "herder";
+    if (!/^[A-Za-z0-9_.\-]{2,32}$/.test(name)) {
+      $("nuMsg").style.color = "var(--red)";
+      $("nuMsg").textContent = "用户名需为 2–32 位字母/数字/下划线/点/横线";
+      return;
+    }
+    if (pass.length < 6) {
+      $("nuMsg").style.color = "var(--red)";
+      $("nuMsg").textContent = "初始密码至少 6 位";
+      return;
+    }
+    btn.disabled = true;
+    $("nuMsg").textContent = "";
+    fetch("/api/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: name, password: pass, role: role })
+    }).then(function (r) { return r.json(); }).then(function (b) {
+      if (b.code !== 0) throw new Error(b.message);
+      $("nuMsg").style.color = "var(--green-deep)";
+      $("nuMsg").textContent = "已创建：" + name + "（" + (ROLE_LABEL[role] || role) + "）";
+      $("nuName").value = ""; $("nuPass").value = "";
+      loadUsers();
+    }).catch(function (e) {
+      $("nuMsg").style.color = "var(--red)";
+      $("nuMsg").textContent = "创建失败：" + e.message;
+    }).finally(function () { btn.disabled = false; });
+  }
+
+  PAGES.users.onShow = function () {
+    if (usersState.loaded) { loadUsers(); return; }
+    usersState.loaded = true;
+    $("nuRole").addEventListener("click", function (e) {
+      var btn = e.target.closest(".mode-btn");
+      if (!btn) return;
+      document.querySelectorAll("#nuRole .mode-btn").forEach(function (b) {
+        b.classList.toggle("active", b === btn);
+      });
+    });
+    $("nuCreateBtn").addEventListener("click", createUser);
+    $("nuPass").addEventListener("keydown", function (e) { if (e.key === "Enter") createUser(); });
+    $("userList").addEventListener("click", function (e) {
+      var reset = e.target.closest("[data-reset]");
+      if (reset) {
+        var newPass = prompt("输入 " + reset.dataset.name + " 的新口令（至少 6 位）：");
+        if (newPass == null) return;
+        if (newPass.length < 6) { alert("口令至少 6 位"); return; }
+        fetch("/api/users/" + reset.dataset.reset + "/password", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: newPass })
+        }).then(function (r) { return r.json(); }).then(function (b) {
+          if (b.code !== 0) throw new Error(b.message);
+          $("nuMsg").style.color = "var(--green-deep)";
+          $("nuMsg").textContent = "已重置 " + reset.dataset.name + " 的口令";
+        }).catch(function (err) { alert("重置失败：" + err.message); });
+        return;
+      }
+      var del = e.target.closest("[data-del-user]");
+      if (del) {
+        if (!confirm("删除账号「" + del.dataset.name + "」？该账号将无法再登录。")) return;
+        fetch("/api/users/" + del.dataset.delUser, { method: "DELETE" })
+          .then(function (r) { return r.json(); }).then(function (b) {
+            if (b.code !== 0) throw new Error(b.message);
+            loadUsers();
+          }).catch(function (err) { alert("删除失败：" + err.message); });
+      }
+    });
+    loadUsers();
+  };
+
+  // ============ 系统设置（运行时配置，只读） ============
+  function setRows(rows) {
+    return rows.map(function (r) {
+      return '<div class="set-row"><span>' + r[0] + "</span><b>" + r[1] + "</b></div>";
+    }).join("");
+  }
+  PAGES.settings.onShow = function () {
+    fetch("/api/system/info").then(function (r) { return r.json(); }).then(function (b) {
+      if (b.code !== 0) return;
+      var d = b.data;
+      $("setApp").innerHTML = setRows([
+        ["应用名称", d.app_name],
+        ["预警阈值（≥）", (d.alert.warning_threshold * 100) + "%"],
+        ["危险阈值（<）", (d.alert.danger_threshold * 100) + "%"],
+        ["载畜量日食量", d.daily_intake_per_sheep + " kg/羊单位·天"],
+        ["Agent 最大轮数", d.agent_max_rounds + " 轮"]
+      ]);
+      $("setVision").innerHTML = setRows([
+        ["视觉模型", d.vision.model_file + "（缺失兜底 " + d.vision.fallback_model + "）"],
+        ["推理设备", d.vision.device],
+        ["置信度阈值", d.vision.confidence],
+        ["单帧最大检测数", d.vision.max_det],
+        ["后台巡检", d.patrol.enabled ? "已开启 · 每 " + d.patrol.interval_seconds + " 秒" : "关闭（手动「立即巡检」始终可用）"],
+        ["告警冷却", d.patrol.cooldown_seconds + " 秒"]
+      ]);
+      $("setLLM").innerHTML = setRows([
+        ["大模型", d.llm.model + (d.llm.configured ? "（已配置 API Key）" : "（未配置 → 规则降级）")],
+        ["瞬时错误重试", "最多 " + d.llm.max_retries + " 次 · 退避基准 " + d.llm.retry_backoff + " 秒"],
+        ["视频上限", (d.video.max_bytes / 1048576).toFixed(0) + " MB · ≤" + d.video.max_seconds + " 秒"],
+        ["检测步长", "每 " + d.video.stride + " 帧检测一次"]
+      ]);
+      $("setStorage").innerHTML = Object.keys(d.storage).map(function (k) {
+        return '<div class="set-row"><span>' + d.storage[k].label + "</span><b>" + d.storage[k].count + " 条</b></div>";
+      }).join("");
+    }).catch(function () {});
+  };
+
+  // ============ 视图 3 · 草场分析（多草场管理） ============
+  var pasturesCache = [];        // 草场清单缓存（含各草场覆盖度/告警等级/载畜量建议）
+  var selectedPastureId = null;  // 当前选中的草场
+
+  function judgeChip(coverage) {
+    if (coverage == null) return ["未分析", "normal"];
+    if (coverage >= 0.6) return ["正常", "normal"];
+    if (coverage >= 0.35) return ["预警", "warning"];
+    return ["危险", "danger"];
+  }
+  function pctText(v, decimals) {
+    return v == null ? "—" : (v * 100).toFixed(decimals == null ? 1 : decimals) + "%";
+  }
+  function apiJSON(url, options) {
+    return fetch(url, options).then(function (r) { return r.json(); }).then(function (b) {
+      if (b.code !== 0) throw new Error(b.message);
+      return b.data;
+    });
+  }
+  function pastureById(id) {
+    return pasturesCache.filter(function (p) { return p.id === id; })[0];
+  }
+
+  function renderPastureList(list) {
+    pasturesCache = list;
+    $("pastureCount").textContent = list.length ? "共 " + list.length + " 个草场" : "";
+    var el = $("pastureList");
+    if (!list.length) { el.innerHTML = '<div class="hist-empty">暂无草场，点击下方「新建草场」</div>'; return; }
+    el.innerHTML = list.map(function (p) {
+      var j = judgeChip(p.coverage);
+      return '<div class="pasture-item' + (p.id === selectedPastureId ? " active" : "") + '" role="button" tabindex="0" data-id="' + p.id + '">' +
+        '<div class="p-top"><span class="p-name">' + p.name + '</span><span class="p-code">' + p.code + '</span>' +
+        '<button class="p-del" data-del="' + p.id + '" title="删除草场">✕</button></div>' +
+        '<div class="p-meta"><span class="chip ' + j[1] + '">' + j[0] + "</span>" +
+        '<span>草场覆盖度 <b>' + pctText(p.coverage) + "</b></span>" +
+        '<span><b>' + p.image_count + "</b> 张照片 · <b>" + p.plot_count + "</b> 个分区</span>" +
+        '<span>' + (p.area_mu || 0) + " 亩</span></div></div>";
+    }).join("");
+  }
+
+  /** 加载草场清单；keepSelection=true 时尽量保持当前选中草场 */
+  function loadPastures(keepSelection) {
+    return apiJSON("/api/pastures").then(function (data) {
+      renderPastureList(data.pastures);
+      if (!data.pastures.length) {
+        selectedPastureId = null;
+        resetPastureDetail();
+        return null;
+      }
+      var keep = keepSelection && data.pastures.some(function (p) { return p.id === selectedPastureId; });
+      return selectPasture(keep ? selectedPastureId : data.pastures[0].id);
+    });
+  }
+
+  function resetPastureDetail() {
+    $("pastureHead").innerHTML = '<span class="name">草场详情</span><span class="meta">请先新建草场</span>';
+    $("pastureSummary").innerHTML = "";
+    $("plotList").innerHTML = '<div class="hist-empty">暂无草场</div>';
+    $("uploadRow").style.display = "none";
+    $("uploadHint").style.display = "none";
+    var c = charts["covChart"]; if (c) c.clear();
+  }
+
+  function selectPasture(pastureId) {
+    selectedPastureId = pastureId;
+    document.querySelectorAll("#pastureList .pasture-item").forEach(function (el) {
+      el.classList.toggle("active", Number(el.dataset.id) === pastureId);
+    });
+    return apiJSON("/api/pastures/" + pastureId).then(function (data) {
+      renderPastureDetail(data);
+      return apiJSON("/api/pastures/" + pastureId + "/trend?days=30&forecast_days=7")
+        .then(renderPastureTrend)
+        .catch(function () {});
+    });
+  }
+
+  function renderPastureDetail(data) {
+    var p = data.pasture, j = judgeChip(p.coverage);
+
+    $("pastureHead").innerHTML =
+      '<span class="name">' + p.name + '</span><span class="p-code">' + p.code + "</span>" +
+      (p.region ? '<span class="meta">' + p.region + "</span>" : "") +
+      '<span class="meta">面积 <b>' + (p.area_mu || 0) + "</b> 亩</span>" +
+      '<button class="btn small" id="analyzeAllBtn" style="margin-left:auto">一键分析全部照片（' +
+      p.image_count + " 张）</button>";
+    $("analyzeAllBtn").disabled = !p.image_count;
+    $("analyzeAllBtn").addEventListener("click", function () { analyzePasture(p.id, this); });
+
+    $("pastureSummary").innerHTML =
+      '<span class="chip ' + j[1] + '">' + j[0] + "</span>" +
+      '<span class="meta">草场覆盖度 <b>' + pctText(p.coverage) + "</b>（<b>" +
+      p.analyzed_plot_count + "/" + p.plot_count + "</b> 个分区已分析）</span>" +
+      (p.worst_plot ? '<span class="meta">最差分区 <b>' + p.worst_plot + "</b> 区 " + pctText(p.worst_coverage) + "</span>" : "") +
+      '<span class="meta">建议载畜量 <b>' + p.recommended_stocking + "</b> 羊单位（理论 " + p.theoretical + " × 系数 " + p.factor + "）</span>" +
+      (p.health && p.health.score != null
+        ? '<span class="meta">多模态草情评分 <b>' + p.health.score + '/100</b>（覆盖度 ' +
+          (p.health.contributions.coverage != null ? p.health.contributions.coverage.toFixed(0) : "—") +
+          " · 绿度 " + (p.health.contributions.greenness != null ? p.health.contributions.greenness.toFixed(0) : "—") +
+          " · 环境 " + (p.health.contributions.environment != null ? p.health.contributions.environment.toFixed(0) : "—") + "）</span>"
+        : "");
+
+    var el = $("plotList");
+    if (!data.plots.length) {
+      el.innerHTML = '<div class="hist-empty">暂无照片，可按编号上传（如 ' + p.code + "-A-01）</div>";
+    } else {
+      el.innerHTML = data.plots.map(function (plot) {
+        var pj = judgeChip(plot.coverage);
+        var rows = plot.images.map(function (im) {
+          var ij = judgeChip(im.coverage);
+          var thumb = im.image_path
+            ? '<img src="' + im.image_path + '" alt="' + im.image_code + '" loading="lazy">'
+            : '<div class="ph">📄</div>';
+          return '<div class="img-row">' + thumb +
+            '<span class="code">' + im.image_code + "</span>" +
+            '<span class="val">' + pctText(im.coverage) + "</span>" +
+            '<span class="chip ' + ij[1] + '" style="font-size:15px;padding:1px 10px">' + ij[0] + "</span>" +
+            '<span class="t">' + (im.analyzed_at ? fmtTime(im.analyzed_at) : "待分析") + "</span>" +
+            '<button class="mini-btn" data-analyze="' + im.image_code + '">分析</button></div>';
+        }).join("");
+        return '<div class="plot-block"><div class="plot-head">' + plot.plot_code + " 区" +
+          '<span class="p-val">' + pctText(plot.coverage) + "</span>" +
+          '<span class="chip ' + pj[1] + '" style="font-size:15px;padding:1px 10px">' + pj[0] + "</span>" +
+          '<span class="p-note">' + plot.images.length + " 张照片</span></div>" +
+          rows + "</div>";
+      }).join("");
+      el.querySelectorAll("[data-analyze]").forEach(function (btn) {
+        btn.addEventListener("click", function () { analyzeImage(p.id, btn.dataset.analyze, btn); });
+      });
+    }
+
+    // 上传区：编号预填（优先未使用的分区），实时解析归属
+    $("uploadRow").style.display = "flex";
+    $("uploadHint").style.display = "block";
+    var usedPlots = {};
+    var existingCodes = {};
+    data.plots.forEach(function (plot) {
+      usedPlots[plot.plot_code] = true;
+      plot.images.forEach(function (im) { existingCodes[im.image_code] = true; });
+    });
+    var nextPlot = "A";
+    for (var i = 0; i < 26; i++) {
+      var letter = String.fromCharCode(65 + i);
+      if (!usedPlots[letter]) { nextPlot = letter; break; }
+    }
+    var seq = 1, code;
+    do { code = p.code + "-" + nextPlot + "-" + String(seq).padStart(2, "0"); seq += 1; } while (existingCodes[code]);
+    $("upPlot").value = nextPlot;
+    $("upCode").value = code;
+    updateUploadHint(p);
+    $("upCode").oninput = function () { updateUploadHint(p); };
+
+    // 载畜量计算：按当前草场自动带入面积与覆盖度折算亩产
+    $("calcScope").textContent = p.code + " · " + p.name + " · " + (p.area_mu || 0) + " 亩";
+    $("fArea").value = p.area_mu || 0;
+    if (p.coverage != null) {
+      $("fYield").value = Math.round(Math.min(p.coverage / 0.6, 1) * 800);
+    }
+  }
+
+  function updateUploadHint(p) {
+    var code = ($("upCode").value || "").trim();
+    var segments = code.split("-");
+    var owned = code.indexOf(p.code + "-") === 0 && segments.length >= 3 && segments[1];
+    $("uploadHint").innerHTML = owned
+      ? "归属：<b>" + p.name + "（" + p.code + "）</b> · <b>" + segments[1] + " 区</b> · 序号 " +
+        segments.slice(2).join("-") + " —— 编号即归属证明"
+      : "编号需以 <b>" + p.code + "-</b> 开头（草场-分区-序号，如 " + p.code + "-A-01）";
+    $("uploadHint").style.color = owned ? "var(--ink-3)" : "#ff3b30";
+  }
+
+  function showAnalysis(image, previewUrl, label) {
+    $("grassPlaceholder").style.display = "none";
+    $("grassResult").style.display = "flex";
+    $("grassMeta").textContent = label || image.image_code;
+    var j = judgeChip(image.coverage);
+    var ringColor = j[1] === "normal" ? "#34c759" : j[1] === "warning" ? "#ff9500" : "#ff3b30";
+    $("covRing").style.setProperty("--p", (image.coverage * 100).toFixed(1));
+    $("covRing").style.setProperty("--ring-color", ringColor);
+    countUp($("covPct"), image.coverage * 100, 1, "%");
+    $("covGli").textContent = image.greenness != null ? image.greenness.toFixed(3) : "—";
+    $("covJudge").textContent = j[0];
+    $("covJudge").className = "chip " + j[1];
+    var thumb = $("covThumb");
+    var src = previewUrl || image.image_path;
+    if (src) { thumb.src = src; thumb.style.display = "block"; } else { thumb.style.display = "none"; }
+  }
+
+  function refreshPastureViews(pastureId) {
+    return Promise.all([
+      loadPastures(true),
+      loadOverview().catch(function () {}),
+      loadCharts(),
+    ]);
+  }
+
+  function analyzePasture(pastureId, btn) {
+    if (btn) btn.disabled = true;
+    return apiJSON("/api/pastures/" + pastureId + "/analyze", { method: "POST" }).then(function (data) {
+      var last = data.results.filter(function (r) { return !r.error; }).pop();
+      if (last) showAnalysis(last, null, "一键分析 · " + data.analyzed + " 张照片");
+      if (data.failed) console.warn("部分照片分析失败", data.results.filter(function (r) { return r.error; }));
+      return refreshPastureViews(pastureId);
+    }).catch(function (e) {
+      alert("分析失败：" + e.message);
+    }).finally(function () { if (btn) btn.disabled = false; });
+  }
+
+  function analyzeImage(pastureId, imageCode, btn) {
+    if (btn) btn.disabled = true;
+    return apiJSON("/api/pastures/" + pastureId + "/images/" + encodeURIComponent(imageCode) + "/analyze", {
+      method: "POST"
+    }).then(function (data) {
+      showAnalysis(data.image, null, "单张分析 · " + imageCode);
+      return refreshPastureViews(pastureId);
+    }).catch(function (e) {
+      alert("分析失败：" + e.message);
+    }).finally(function () { if (btn) btn.disabled = false; });
+  }
+
+  function uploadPastureImage() {
+    var p = pastureById(selectedPastureId);
+    if (!p) return;
+    var code = ($("upCode").value || "").trim();
+    if (code.indexOf(p.code + "-") !== 0) {
+      alert("编号需以 " + p.code + "- 开头（如 " + p.code + "-A-01），用于标明照片归属");
+      return;
+    }
+    var input = $("upFile");
+    var file = input.files && input.files[0];
+    if (!file) { alert("请先选择图片文件"); return; }
+    var fd = new FormData();
+    fd.append("file", file, file.name || "upload.jpg");
+    fd.append("image_code", code);
+    var plot = ($("upPlot").value || "").trim();
+    if (plot) fd.append("plot_code", plot);
+
+    var btn = $("upBtn");
+    btn.disabled = true;
+    apiJSON("/api/pastures/" + p.id + "/images", { method: "POST", body: fd }).then(function (data) {
+      showAnalysis(data.image, URL.createObjectURL(file), "上传分析 · " + code);
+      input.value = "";
+      return refreshPastureViews(p.id);
+    }).catch(function (e) {
+      alert("上传失败：" + e.message);
+    }).finally(function () { btn.disabled = false; });
+  }
+
+  $("upBtn").addEventListener("click", function () { $("upFile").click(); });
+  $("upFile").addEventListener("change", function () { if (this.files[0]) uploadPastureImage(); });
+  ["dragover", "dragenter"].forEach(function (ev) {
+    $("uploadRow").addEventListener(ev, function (e) { e.preventDefault(); });
+  });
+  $("uploadRow").addEventListener("drop", function (e) {
+    e.preventDefault();
+    var f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) { $("upFile").files = e.dataTransfer.files; uploadPastureImage(); }
+  });
+
+  $("pastureList").addEventListener("click", function (e) {
+    var del = e.target.closest("[data-del]");
+    if (del) {
+      e.stopPropagation();
+      var p = pastureById(Number(del.dataset.del));
+      if (!p) return;
+      if (confirm("删除草场「" + p.name + "」？该草场的照片登记与覆盖度记录将一并删除。")) {
+        apiJSON("/api/pastures/" + p.id, { method: "DELETE" }).then(function () {
+          if (selectedPastureId === p.id) selectedPastureId = null;
+          return loadPastures(false);
+        }).catch(function (err) { alert("删除失败：" + err.message); });
+      }
+      return;
+    }
+    var item = e.target.closest(".pasture-item");
+    if (item) selectPasture(Number(item.dataset.id));
+  });
+
+  $("npToggle").addEventListener("click", function () {
+    $("newPastureForm").style.display = "block";
+    this.style.display = "none";
+    $("npCode").focus();
+  });
+  $("npCancel").addEventListener("click", function () {
+    $("newPastureForm").style.display = "none";
+    $("npToggle").style.display = "block";
+  });
+  $("npCreate").addEventListener("click", function () {
+    var payload = {
+      code: ($("npCode").value || "").trim().toUpperCase(),
+      name: ($("npName").value || "").trim(),
+      region: ($("npRegion").value || "").trim() || null,
+      area_mu: parseFloat($("npArea").value || "0") || 0
+    };
+    if (!payload.code || !payload.name) { alert("请填写草场编号与名称"); return; }
+    var btn = this;
+    btn.disabled = true;
+    apiJSON("/api/pastures", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(function (created) {
+      $("newPastureForm").style.display = "none";
+      $("npToggle").style.display = "block";
+      $("npCode").value = $("npName").value = $("npRegion").value = "";
+      selectedPastureId = created.id;
+      return loadPastures(true);
+    }).catch(function (e) {
+      alert("创建失败：" + e.message);
+    }).finally(function () { btn.disabled = false; });
+  });
+
+  // 草场清单在 startApp() 中首次加载（登录后才开始拉数据）
+
+  $("calcBtn").addEventListener("click", function () {
+    var payload = {
+      yield_per_area: parseFloat($("fYield").value || "0"),
+      area: parseFloat($("fArea").value || "0"),
+      utilization: parseFloat($("fUtil").value || "0"),
+      grazing_days: parseFloat($("fDays").value || "0")
+    };
+    if ([payload.yield_per_area, payload.area, payload.utilization, payload.grazing_days].some(function (v) { return isNaN(v); })) {
+      $("calcResult").innerHTML = '<div class="note" style="color:#ff3b30">请输入有效数值</div>';
+      return;
+    }
+    var btn = this; btn.disabled = true;
+    fetch("/api/vision/carrying-capacity", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      .then(function (r) { return r.json(); })
+      .then(function (b) {
+        if (b.code !== 0) throw new Error(b.message);
+        var d = b.data;
+        var y = payload.yield_per_area, area = payload.area, u = payload.utilization, days = payload.grazing_days;
+        var totalYield = y * area, usable = totalYield * u;
+        var fmt = function (v) { return Number(v).toLocaleString("zh-CN", { maximumFractionDigits: 1 }); };
+        var p = pastureById(selectedPastureId);
+        var FACTOR_TEXT = { normal: "正常等级不折减（系数 1）", warning: "预警等级折减至 60%", danger: "危险等级禁牧（系数 0）" };
+        var alertBox = "";
+        if (p && p.coverage != null) {
+          alertBox =
+            '<div class="alert-callout ' + p.alert_level + '">' +
+              '<div class="ac-title">当前草场（' + p.code + " " + p.name + "）告警：" + ALERT_LABEL[p.alert_level] +
+              "（" + FACTOR_TEXT[p.alert_level] + "）</div>" +
+              '<div class="ac-body">草场覆盖度 <b>' + (p.coverage * 100).toFixed(1) + "%</b>（" + p.analyzed_plot_count +
+              " 个分区聚合）；建议载畜量 = 理论载畜量 × 告警系数 → <b>" + p.recommended_stocking +
+              " 羊单位</b>；上方为参数化理论值，系统按草场给出的是折减后的建议值</div>" +
+            "</div>";
+        } else if (overviewCache && overviewCache.alert_level) {
+          var ov = overviewCache;
+          alertBox =
+            '<div class="alert-callout ' + ov.alert_level + '">' +
+              '<div class="ac-title">全区告警：' + ALERT_LABEL[ov.alert_level] + "（" + FACTOR_TEXT[ov.alert_level] + "）</div>" +
+              '<div class="ac-body">建议载畜量 = 理论载畜量 × 告警系数 → <b>' +
+              (ov.recommended_stocking != null ? ov.recommended_stocking : "—") + " 羊单位</b>；上方为参数化理论值，系统全站展示的是折减后的建议值</div>" +
+            "</div>";
+        }
+        $("calcResult").innerHTML =
+          '<div class="calc-hero"><span class="big-num">' + d.recommended_stocking + '</span><span class="unit-tag">羊单位（理论载畜量）</span></div>' +
+          '<div class="calc-breakdown">' +
+            '<div class="step"><span>① 总产草量</span><b>' + fmt(totalYield) + ' kg</b><i>' + fmt(y) + ' kg/亩 × ' + fmt(area) + ' 亩</i></div>' +
+            '<div class="step"><span>② 可利用草量</span><b>' + fmt(usable) + ' kg</b><i>× 利用率 ' + (u * 100).toFixed(0) + '%</i></div>' +
+            '<div class="step"><span>③ 理论载畜量</span><b>' + d.recommended_stocking + ' 羊单位</b><i>÷ (日食量 2 kg × ' + fmt(days) + ' 天)</i></div>' +
+            '<div class="step"><span>④ 折合牛单位</span><b>' + (d.recommended_stocking / 5).toFixed(1) + ' 头牛</b><i>1 牛 ≈ 5 羊单位</i></div>' +
+          "</div>" +
+          '<div class="note" style="margin-top:12px">' + d.rotation_plan + "</div>" +
+          alertBox;
+      })
+      .catch(function (e) { $("calcResult").innerHTML = '<div class="note" style="color:#ff3b30">计算失败：' + e.message + "</div>"; })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  // ============ 巡检告警（SSE 实时推送 + 5 秒轮询兜底） ============
+  var alertedIds = {};        // 已弹出过的告警 id（轮询与 SSE 去重）
+  var alertsReady = false;    // 首屏历史不弹窗
+
+  function renderAlerts(list) {
+    $("alertCount").textContent = list.length;
+    var el = $("alertList");
+    if (!list.length) {
+      el.innerHTML = '<div class="hist-empty">暂无告警 · 巡检未发现异常</div>';
+      return;
+    }
+    el.innerHTML = list.map(function (a) {
+      var lv = a.level || "normal";
+      return '<div class="alert-item ' + lv + '" data-id="' + a.id + '">' +
+        '<div class="a-top"><span class="chip ' + lv + '" style="font-size:15px;padding:1px 10px">' + ALERT_LABEL[lv] + "</span>" +
+        '<span class="a-title">' + escapeHtml(a.title) + "</span>" +
+        '<span class="t">' + fmtTime(a.created_at) + "</span>" +
+        (a.acknowledged
+          ? '<span class="a-ack">✓ 已确认</span>'
+          : '<button class="mini-btn" data-ack="' + a.id + '">已知悉</button>') +
+        "</div>" +
+        '<div class="a-msg">' + escapeHtml(a.message || "") + "</div></div>";
+    }).join("");
+    el.querySelectorAll("[data-ack]").forEach(function (btn) {
+      btn.addEventListener("click", function () { acknowledgeAlert(btn.dataset.ack, btn); });
+    });
+    // 列表重渲染（含 5 秒轮询）后，被定位的告警仍保持「◀ 实时推送」标记
+    if (pinnedAlert) {
+      if (Date.now() < pinnedAlert.until) highlightAlertItem(pinnedAlert.id);
+      else pinnedAlert = null;
+    }
+  }
+
+  function loadAlerts() {
+    return fetch("/api/dashboard/alerts?limit=20")
+      .then(function (r) { return r.json(); })
+      .then(function (b) {
+        if (b.code !== 0) return;
+        var list = b.data.alerts;
+        if (alertsReady) {
+          list.slice().reverse().forEach(showAlertToast);  // 新告警（时间正序弹出）
+        } else {
+          list.forEach(function (a) { alertedIds[a.id] = true; });  // 首屏历史不弹
+          alertsReady = true;
+        }
+        renderAlerts(list);
+        renderPatrolTable(list);  // 巡检告警独立页（全量表格，同一数据源）
+      })
+      .catch(function (e) { console.warn("告警加载失败", e); });
+  }
+
+  function acknowledgeAlert(id, btn) {
+    if (btn) btn.disabled = true;
+    fetch("/api/dashboard/alerts/" + id + "/ack", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (b) {
+        if (b.code === 0) loadAlerts();
+        else alert(b.message);
+      })
+      .catch(function (e) { console.warn("确认失败", e); })
+      .finally(function () { if (btn) btn.disabled = false; });
+  }
+
+  var pinnedAlert = null;   // 被实时弹窗定位的告警 {id, until}：列表刷新（5 秒轮询）后仍保持标记
+
+  /** 给指定告警条加高亮与「◀ 实时推送」标记；列表里还没有该条时返回 false（由调用方重试） */
+  function highlightAlertItem(alertId) {
+    if (alertId == null) return false;
+    var item = document.querySelector('#alertList .alert-item[data-id="' + alertId + '"]');
+    if (!item) return false;
+    item.scrollIntoView({ block: "nearest" });
+    item.classList.remove("flash-hit");
+    void item.offsetWidth;  // 重新触发动画
+    item.classList.add("flash-hit");
+    var title = item.querySelector(".a-title");
+    if (title && !title.querySelector(".alert-marker")) {
+      var mark = document.createElement("span");
+      mark.className = "alert-marker";
+      mark.textContent = "◀ 实时推送";
+      title.appendChild(mark);
+    }
+    setTimeout(function () { item.classList.remove("flash-hit"); }, 4200);
+    return true;
+  }
+
+  /** 点击实时弹窗 → 定位到告警面板：其余界面压暗（聚光灯）、面板保持明亮、
+   *  目标告警条描边高亮 + 「◀ 实时推送」标记，让「跳转」看得见 */
+  function focusAlertPanel(alertId) {
+    switchView("overview");
+    var panel = $("alertPanel");
+    if (!panel) return;
+
+    // SSE 推送可能早于列表刷新：先标记，标记不到则刷新列表后再补一次
+    if (alertId != null) pinnedAlert = { id: alertId, until: Date.now() + 9000 };
+    if (!highlightAlertItem(alertId)) {
+      loadAlerts().then(function () { highlightAlertItem(alertId); });
+    }
+
+    try { panel.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) { panel.scrollIntoView(); }
+
+    // 聚光灯：除目标面板外整体压暗
+    var rect = panel.getBoundingClientRect();
+    var spot = document.createElement("div");
+    spot.className = "spotlight";
+    var hole = document.createElement("div");
+    hole.className = "sp-hole";
+    hole.style.left = rect.left + "px";
+    hole.style.top = rect.top + "px";
+    hole.style.width = rect.width + "px";
+    hole.style.height = rect.height + "px";
+    spot.appendChild(hole);
+    document.body.appendChild(spot);
+    panel.classList.add("spot-on");
+
+    var cardTitle = panel.querySelector(".card-title");
+    if (cardTitle && !cardTitle.querySelector(".panel-badge")) {
+      var badge = document.createElement("span");
+      badge.className = "panel-badge";
+      badge.textContent = "已定位到实时告警";
+      cardTitle.appendChild(badge);
+      setTimeout(function () { badge.remove(); }, 3200);
+    }
+
+    setTimeout(function () {
+      spot.classList.add("out");
+      panel.classList.remove("spot-on");
+      setTimeout(function () { spot.remove(); }, 300);  // 与 .25s 退场同步
+    }, 2200);
+  }
+
+  /** 实时弹出（右上角浮层，12 秒后自动收起；点击跳到告警面板） */
+  function showAlertToast(alertItem) {
+    if (!alertItem || alertedIds[alertItem.id]) return;
+    alertedIds[alertItem.id] = true;
+    var lv = alertItem.level || "normal";
+    var box = document.createElement("div");
+    box.className = "alert-toast " + lv;
+    box.dataset.id = alertItem.id;  // 便于定位/测试
+    box.innerHTML =
+      '<div class="at-top"><span class="chip ' + lv + '" style="font-size:15px;padding:1px 10px">' +
+      ALERT_LABEL[lv] + "</span><b>" + escapeHtml(alertItem.title) + "</b></div>" +
+      '<div class="at-msg">' + escapeHtml(alertItem.message || "") + "</div>" +
+      '<div class="at-hint">点击查看告警面板 →</div>';
+    box.addEventListener("click", function () {
+      focusAlertPanel(alertItem.id);
+      box.remove();
+    });
+    $("toastHost").appendChild(box);
+    setTimeout(function () {
+      box.classList.add("out");
+      setTimeout(function () { box.remove(); }, 300);  // 与 .25s 退场同步，避免残留不可见元素吃点击
+    }, 12000);
+  }
+
+  function connectAlertStream() {
+    if (!window.EventSource || !authToken()) return;
+    try {
+      // EventSource 无法自定义请求头 → 令牌走查询参数
+      alertSource = new EventSource("/api/dashboard/alerts/stream?token=" + encodeURIComponent(authToken()));
+      alertSource.addEventListener("alert", function (event) {
+        var payload;
+        try { payload = JSON.parse(event.data); } catch (e) { return; }
+        showAlertToast(payload);
+        loadAlerts();
+      });
+      alertSource.onerror = function () {
+        // 401/403 会让连接直接 CLOSED（规范：非 200 响应不自动重连）——此时重建没用，
+        // 由 5s 轮询的 401 触发 handleUnauthorized 回登录；网络抖动（CONNECTING）交给浏览器自愈，
+        // CLOSED 且仍有登录态时 15s 后重建一次
+        if (alertSource && alertSource.readyState === 2) {
+          alertSource = null;
+          setTimeout(function () { if (authToken() && booted) connectAlertStream(); }, 15000);
+        }
+      };
+    } catch (e) {
+      console.warn("SSE 连接失败，仅使用轮询兜底", e);
+    }
+  }
+
+  var PATROL_REASON = {
+    first: "首次判定，已告警",
+    escalated: "等级升级，已即时告警",
+    recovered: "已回落，发出恢复通知",
+    repeat_reminder: "冷却期满，补发提醒",
+    cooldown_suppressed: "同级冷却期内已抑制",
+    normal: "正常，无需告警"
+  };
+
+  /** 手动巡检结果：逐场列出每个草场的判定（不只看告警的草场） */
+  function patrolRowsHtml(results) {
+    return results.map(function (r) {
+      var lv = r.level || "normal";
+      var who = ((r.pasture_code || "") + " " + (r.pasture_name || "")).trim() || "巡检点位";
+      return '<div class="pr-row">' +
+        '<span class="chip ' + lv + '">' + ALERT_LABEL[lv] + "</span>" +
+        '<span class="pr-who">' + escapeHtml(who) + "</span>" +
+        '<span class="pr-cov">覆盖度 ' + pctText(r.coverage) + "</span>" +
+        '<span class="pr-why">' + (PATROL_REASON[r.reason] || r.reason) + "</span></div>";
+    }).join("");
+  }
+
+  function renderPatrolResult(data) {
+    var host = $("patrolResult");
+    var results = data.results || [];
+    if (!results.length) {
+      host.hidden = true;
+      var pageHost0 = $("patrolPageResult");
+      if (pageHost0) pageHost0.innerHTML = "";
+      return;
+    }
+    var s = data.summary || {};
+    host.hidden = false;
+    host.innerHTML =
+      '<div class="pr-head">本轮巡检 ' + new Date().toLocaleTimeString("zh-CN") +
+      " · 逐场独立检测 " + results.length + " 个草场（告警 " + (s.alerted || 0) +
+      " · 抑制 " + (s.suppressed || 0) + " · 正常 " + (s.normal || 0) + "）</div>" +
+      patrolRowsHtml(results);
+    // 巡检告警独立页同步展示本轮结果
+    var pageHost = $("patrolPageResult");
+    if (pageHost) {
+      pageHost.innerHTML = '<span style="font-size:15px;color:var(--ink-3)">本轮：告警 ' +
+        (s.alerted || 0) + " · 抑制 " + (s.suppressed || 0) + " · 正常 " + (s.normal || 0) + "</span>" +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' + patrolRowsHtml(results) + "</div>";
+    }
+  }
+
+  function runPatrolNow(btn) {
+    if (btn) btn.disabled = true;
+    fetch("/api/patrol/run", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (b) {
+        if (b.code !== 0) throw new Error(b.message);
+        var d = b.data;
+        renderPatrolResult(d);                              // 每个草场的结果都展示
+        (d.alerts || []).forEach(showAlertToast);           // 本轮告警逐条弹出
+        return loadAlerts();
+      })
+      .catch(function (e) { alert("巡检失败：" + e.message); })
+      .finally(function () { if (btn) btn.disabled = false; });
+  }
+
+  $("patrolRunBtn").addEventListener("click", function () { runPatrolNow(this); });
+  // 告警轮询与 SSE 在 startApp() 中启动（登录后才开始拉数据）
+
+  // ============ 视图 4 · AI 助手（SSE 思考流 + 历史对话） ============
+  var streamEl = $("stream");
+  var streaming = false;    // 实时问答进行中
+  var streamDone = false;   // SSE 读取完毕
+  var streamQueue = [];     // 待打字机渲染的行：[样式, 文本, 时间戳, 是否快速]
+  var draining = false;
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function streamLine(cls, tsText) {
+    var div = document.createElement("div");
+    div.className = "sline " + cls;
+    var ts = document.createElement("span");
+    ts.className = "ts"; ts.textContent = tsText || "";
+    var body = document.createElement("span");
+    body.className = "body";
+    div.appendChild(ts); div.appendChild(body);
+    streamEl.appendChild(div);
+    return body;  // 打字机写入目标
+  }
+  function typeInto(el, text, done, fast) {
+    var i = 0, caret = document.createElement("span");
+    caret.className = "caret";
+    el.appendChild(caret);
+    var timer = setInterval(function () {
+      if (i >= text.length) { clearInterval(timer); caret.remove(); if (done) done(); return; }
+      caret.insertAdjacentText("beforebegin", text[i]);
+      i += 1;
+      streamEl.scrollTop = streamEl.scrollHeight;
+    }, fast ? 3 : 12);
+  }
+  function pushLine(cls, text, ts, fast) {
+    streamQueue.push([cls, text, ts, fast]);
+    drainStream();
+  }
+  function drainStream() {
+    if (draining) return;
+    if (!streamQueue.length) {
+      if (streamDone && streaming) {  // 实时问答：流结束且动画播完 → 复位并刷新历史
+        streaming = false;
+        $("agentSend").disabled = false;
+        loadHistory();
+      }
+      return;
+    }
+    draining = true;
+    var item = streamQueue.shift();
+    typeInto(streamLine(item[0], item[2]), item[1], function () {
+      draining = false;
+      drainStream();
+    }, item[3]);
+  }
+  function toolResultText(name, result) {
+    if (!result) return "（无返回）";
+    if (result.error) return "工具返回错误：" + result.error;
+    if (name === "grassland_coverage") {
+      return "覆盖度 " + (result.coverage * 100).toFixed(2) + "% ｜ 绿度 " + result.greenness.toFixed(3);
+    }
+    if (name === "sheep_count") {
+      return "识别到 " + result.count + " 只羊 ｜ " + JSON.stringify(result.per_class || {});
+    }
+    if (name === "carrying_capacity") {
+      return "理论载畜量 " + result.recommended_stocking + " 羊单位（含轮牧方案）";
+    }
+    if (name === "query_history") return "查询到 " + (result.count || 0) + " 条历史记录";
+    return JSON.stringify(result);
+  }
+  function renderDecision(d) {
+    $("decisionPlaceholder").style.display = "none";
+    $("decisionBody").style.display = "block";
+    $("decAlert").textContent = "⚠ " + ALERT_LABEL[d.alert_level];
+    $("decAlert").className = "alert-badge " + d.alert_level;
+    countUp($("decStocking"), d.recommended_stocking, 0);
+    $("decActions").innerHTML = d.recommended_actions.map(function (a) { return "<li>" + escapeHtml(a) + "</li>"; }).join("");
+    $("decRotation").textContent = d.rotation_plan || "—";
+    $("decEvidence").innerHTML = d.evidence.map(function (e) { return "<li>" + escapeHtml(e) + "</li>"; }).join("");
+  }
+
+  /** SSE 事件 → 思考流行（实时与历史回放共用同一渲染） */
+  function handleEvent(ev, push) {
+    var ts = ev.ts != null ? (ev.ts / 1000).toFixed(1) + "s" : "";
+    if (ev.type === "thinking") push("think", "💭 " + ev.text, ts);
+    else if (ev.type === "analysis") push("analysis", "🧠 " + ev.text, ts);
+    else if (ev.type === "tool_call") push("tool-call", "🔧 调用工具 " + ev.name + "(" + JSON.stringify(ev.arguments || {}) + ")", ts);
+    else if (ev.type === "tool_result") push("tool-result", "📊 " + ev.name + " → " + toolResultText(ev.name, ev.result), ts);
+    else if (ev.type === "answer") {
+      push("answer", "✅ 决策生成完成：告警 " + ALERT_LABEL[ev.decision.alert_level] +
+        "，建议载畜量 " + ev.decision.recommended_stocking + " 羊单位", ts);
+      renderDecision(ev.decision); loadCharts(); loadOverview().catch(function () {});
+    }
+    else if (ev.type === "error") push("err", "❌ " + ev.message, ts);
+  }
+
+  // ---------- 历史对话（服务端保存，点击回放思考过程） ----------
+  function renderHistoryList(logs) {
+    var el = $("historyList");
+    $("histCount").textContent = logs.length ? "共 " + logs.length + " 条" : "";
+    if (!logs.length) { el.innerHTML = '<div class="hist-empty">暂无历史对话</div>'; return; }
+    el.innerHTML = logs.map(function (log) {
+      var lv = (log.decision && log.decision.alert_level) || "normal";
+      return '<div class="hist-row hlog" role="button" tabindex="0" data-log-id="' + log.id + '">' +
+        '<div class="q-text" title="' + escapeHtml(log.question) + '">' + escapeHtml(log.question) + "</div>" +
+        '<div class="meta">' + fmtTime(log.created_at) +
+        '<span class="chip ' + lv + '">' + ALERT_LABEL[lv] + "</span></div></div>";
+    }).join("");
+  }
+  function loadHistory() {
+    return fetch("/api/agent/history?limit=20").then(function (r) { return r.json(); }).then(function (b) {
+      if (b.code === 0) renderHistoryList(b.data.logs);
+    }).catch(function (e) { console.warn("历史加载失败", e); });
+  }
+  function markActiveLog(logId) {
+    document.querySelectorAll("#historyList .hlog").forEach(function (el) {
+      el.classList.toggle("active", Number(el.dataset.logId) === logId);
+    });
+  }
+  /** 打开某条历史对话：切到 AI 助手视图并回放思考过程 + 决策（大屏决策流点击入口） */
+  function openHistory(logId) {
+    if (streaming) { alert("思考流正在输出，请稍候再查看历史对话"); return; }
+    switchView("agent");
+    markActiveLog(logId);
+    fetch("/api/agent/history/" + logId).then(function (r) { return r.json(); }).then(function (b) {
+      if (b.code !== 0) throw new Error(b.message);
+      replayLog(b.data);
+    }).catch(function (e) { console.warn("历史加载失败", e); });
+  }
+  function replayLog(log) {
+    streamQueue = [];
+    streamDone = false;
+    streamEl.innerHTML = "";
+    typeInto(streamLine("think", ""), "❓ 提问：" + log.question, function () {}, true);
+    var events = log.events || [];
+    if (!events.length) pushLine("think", "（该记录未保存思考过程，仅显示问题与最终决策）", "", true);
+    events.forEach(function (ev) {
+      handleEvent(ev, function (cls, text, ts) { pushLine(cls, text, ts, true); });
+    });
+  }
+
+  function askAgent(question) {
+    if (!question || streaming) return;
+    streaming = true;
+    streamDone = false;
+    streamQueue = [];
+    $("agentSend").disabled = true;
+    markActiveLog(null);
+    streamEl.innerHTML = "";
+    typeInto(streamLine("think", "0.0s"), "❓ 提问：" + question, function () {});
+    var push = function (cls, text, ts) { pushLine(cls, text, ts, false); };
+
+    fetch("/api/agent/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: question })
+    }).then(function (resp) {
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = "";
+      function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) { streamDone = true; drainStream(); return; }
+          buf += decoder.decode(r.value, { stream: true });
+          var idx;
+          while ((idx = buf.indexOf("\n\n")) >= 0) {
+            var chunk = buf.slice(0, idx); buf = buf.slice(idx + 2);
+            chunk.split("\n").forEach(function (line) {
+              if (line.indexOf("data: ") === 0) {
+                try { handleEvent(JSON.parse(line.slice(6)), push); } catch (e) { console.warn("事件解析失败", line); }
+              }
+            });
+            drainStream();
+          }
+          return pump();
+        });
+      }
+      return pump();
+    }).catch(function (e) {
+      push("err", "❌ 请求失败：" + e.message, "");
+      streamDone = true;
+      drainStream();
+    });
+  }
+  $("agentSend").addEventListener("click", function () { askAgent($("agentInput").value.trim()); });
+  $("agentInput").addEventListener("keydown", function (e) { if (e.key === "Enter") askAgent($("agentInput").value.trim()); });
+  document.querySelectorAll("#view-agent .sample-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () { $("agentInput").value = btn.dataset.q; askAgent(btn.dataset.q); });
+  });
+  $("historyList").addEventListener("click", function (e) {
+    var row = e.target.closest(".hlog");
+    if (row) openHistory(Number(row.dataset.logId));
+  });
+  // 概览「Agent 决策流」点击 → 跳转到对应回答
+  $("flowList").addEventListener("click", function (e) {
+    var item = e.target.closest(".flow-item[data-log-id]");
+    if (item) openHistory(Number(item.dataset.logId));
+  });
+
+  // ============ 启动门：先校验登录态，再进入驾驶舱 ============
+  (function boot() {
+    if (!authToken()) { showLogin(); return; }
+    // 用打过补丁的 fetch：自动携带 Authorization；401 时 handleUnauthorized
+    // 会清令牌并显示「登录已过期」（正是启动门想要的语义）
+    fetch("/api/auth/me").then(function (r) {
+      if (r.ok) {
+        return r.json().then(function (b) {
+          if (b && b.data) setUserName(b.data.username);
+        }).catch(function () {});
+      }
+    }).catch(function () { /* 服务暂不可达：仍进入，由轮询/提示兜底 */ })
+      .then(function () { if (authToken()) startApp(); });
+  })();
+})();
+</script>
+</body>
+</html>

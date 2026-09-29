@@ -1,0 +1,9 @@
+# 运行时产物
+data/*.db
+data/*.db-wal
+data/*.db-shm
+__pycache__/
+*.py[cod]
+.pytest_cache/
+# 本地配置与密钥
+.env

@@ -1,0 +1,19 @@
+fastapi
+uvicorn
+pydantic>=2
+pydantic-settings
+python-multipart
+numpy
+opencv-python-headless
+ultralytics
+openai
+httpx
+pytest
+# 视频跟踪与越线统计（阶段 6）：ByteTrack / LineZone
+# supervision 官方声明 av/matplotlib/requests，本项目用不到（只做检测帧输入 + 帧序列输出），
+# 故按 --no-deps 安装并显式补下列运行期依赖（见 README「视频跟踪依赖」）
+supervision==0.30.3
+scipy
+pydeprecate<0.12
+defusedxml
+tqdm

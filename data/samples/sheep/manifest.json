@@ -1,0 +1,134 @@
+{
+ "note": "编号=草场-用途-序号（S=航拍羊群照片，与植被分区照片 A/B/C 区分）。来源：Mendeley Data《UAV footage of Merino sheep in South Africa》（https://data.mendeley.com/datasets/nppwbkdf85/1），许可见数据集页面；truth=裁区内 COCO 点标注数（参考值），detected=本机 GPU 实测检出（±2 波动）。",
+ "size": [
+  1440,
+  1080
+ ],
+ "samples": [
+  {
+   "code": "P1-S-01",
+   "file": "P1-S-01.jpg",
+   "pasture": "P1",
+   "source": "Photo_6553957_DJI_357_jpg_5001302_0_2021111781916_photo_original.jpg",
+   "crop": null,
+   "truth": 33,
+   "w": 1440,
+   "h": 1080,
+   "note": "开阔牧地羊列（绿褐相间）",
+   "detected": 33
+  },
+  {
+   "code": "P1-S-02",
+   "file": "P1-S-02.jpg",
+   "pasture": "P1",
+   "source": "Photo_6553949_DJI_349_jpg_5823893_0_2021111781426_photo_original.jpg",
+   "crop": null,
+   "truth": 19,
+   "w": 1440,
+   "h": 1080,
+   "note": "绿色牧地羊群成列",
+   "detected": 17
+  },
+  {
+   "code": "P1-S-03",
+   "file": "P1-S-03.jpg",
+   "pasture": "P1",
+   "source": "DJI_0488.JPG",
+   "crop": null,
+   "truth": 11,
+   "w": 1440,
+   "h": 1080,
+   "note": "饮水点旁小群",
+   "detected": 12
+  },
+  {
+   "code": "P1-S-04",
+   "file": "P1-S-04.jpg",
+   "pasture": "P1",
+   "source": "DJI_0484.JPG",
+   "crop": null,
+   "truth": 8,
+   "w": 1440,
+   "h": 1080,
+   "note": "牧道旁小群",
+   "detected": 8
+  },
+  {
+   "code": "P2-S-01",
+   "file": "P2-S-01.jpg",
+   "pasture": "P2",
+   "source": "Photo_6554011_DJI_411_jpg_6451356_0_20211124162536_photo_original.jpg",
+   "crop": null,
+   "truth": 149,
+   "w": 1440,
+   "h": 1080,
+   "note": "大群沿围栏行进",
+   "detected": 162
+  },
+  {
+   "code": "P2-S-02",
+   "file": "P2-S-02.jpg",
+   "pasture": "P2",
+   "source": "DJI_0504.JPG",
+   "crop": null,
+   "truth": 88,
+   "w": 1440,
+   "h": 1080,
+   "note": "开阔牧地羊群密团",
+   "detected": 96
+  },
+  {
+   "code": "P2-S-03",
+   "file": "P2-S-03.jpg",
+   "pasture": "P2",
+   "source": "Photo_6553998_DJI_398_jpg_6210672_0_2021112416810_photo_original.jpg",
+   "crop": null,
+   "truth": 10,
+   "w": 1440,
+   "h": 1080,
+   "note": "绿色草地散羊",
+   "detected": 11
+  },
+  {
+   "code": "P3-S-01",
+   "file": "P3-S-01.jpg",
+   "pasture": "P3",
+   "source": "DJI_0486.JPG",
+   "crop": null,
+   "truth": 7,
+   "w": 1440,
+   "h": 1080,
+   "note": "干燥牧地小群",
+   "detected": 7
+  },
+  {
+   "code": "P3-S-02",
+   "file": "P3-S-02.jpg",
+   "pasture": "P3",
+   "source": "Photo_6554003_DJI_403_jpg_6030034_0_202111241696_photo_original.jpg",
+   "crop": null,
+   "truth": 2,
+   "w": 1440,
+   "h": 1080,
+   "note": "坡地散羊",
+   "detected": 2
+  },
+  {
+   "code": "P3-S-03",
+   "file": "P3-S-03.jpg",
+   "pasture": "P3",
+   "source": "DJI_0693.JPG",
+   "crop": [
+    0,
+    1500,
+    2400,
+    1800
+   ],
+   "truth": 0,
+   "w": 1440,
+   "h": 1080,
+   "note": "空场景（无羊，验证零检出）",
+   "detected": 0
+  }
+ ]
+}

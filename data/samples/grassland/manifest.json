@@ -1,0 +1,135 @@
+{
+ "note": "来源：Mendeley Data《UAV footage of Merino sheep in South Africa》（https://data.mendeley.com/datasets/nppwbkdf85/1）；覆盖度/绿度为入库前实测值（算法：ExG+HSV 双阈值），复现见 scripts/make_grassland_samples.py",
+ "pastures": [
+  {
+   "code": "P1",
+   "name": "东区示范牧场",
+   "images": [
+    {
+     "code": "P1-A-01",
+     "file": "P1-A-01.jpg",
+     "source": "DJI_0514.JPG",
+     "note": "灌溉草场（长势良好）",
+     "w": 1440,
+     "h": 1080,
+     "coverage": 0.7883,
+     "greenness": 0.1861
+    },
+    {
+     "code": "P1-A-02",
+     "file": "P1-A-02.jpg",
+     "source": "DJI_0625.JPG",
+     "note": "灌溉草场（条带刈割）",
+     "w": 1440,
+     "h": 1080,
+     "coverage": 0.6976,
+     "greenness": 0.1664
+    },
+    {
+     "code": "P1-B-01",
+     "file": "P1-B-01.jpg",
+     "source": "DJI_0641.JPG",
+     "note": "放牧地（返青良好）",
+     "w": 1440,
+     "h": 1080,
+     "coverage": 0.6594,
+     "greenness": 0.1645
+    },
+    {
+     "code": "P1-C-01",
+     "file": "P1-C-01.jpg",
+     "source": "DJI_0624.JPG",
+     "note": "放牧地（刈割后再生）",
+     "w": 1440,
+     "h": 1080,
+     "coverage": 0.6362,
+     "greenness": 0.1664
+    }
+   ],
+   "expected": {
+    "mean_coverage": 0.6954,
+    "level": "normal"
+   }
+  },
+  {
+   "code": "P2",
+   "name": "西区生态牧场",
+   "images": [
+    {
+     "code": "P2-A-01",
+     "file": "P2-A-01.jpg",
+     "source": "DJI_0642.JPG",
+     "note": "降水依赖草场（草情中等）",
+     "w": 1440,
+     "h": 1080,
+     "coverage": 0.5678,
+     "greenness": 0.1664
+    },
+    {
+     "code": "P2-B-01",
+     "file": "P2-B-01.jpg",
+     "source": "Photo_6553951_DJI_351_jpg_6135078_0_2021111781522_photo_original.jpg",
+     "note": "羊群卧息地（草情中等）",
+     "w": 1440,
+     "h": 1080,
+     "coverage": 0.3585,
+     "greenness": 0.1459
+    },
+    {
+     "code": "P2-C-01",
+     "file": "P2-C-01.jpg",
+     "source": "Photo_6553956_DJI_356_jpg_4977748_0_202111178198_photo_original.jpg",
+     "note": "散牧地（草情中等偏下）",
+     "w": 1440,
+     "h": 1080,
+     "coverage": 0.2758,
+     "greenness": 0.0632
+    }
+   ],
+   "expected": {
+    "mean_coverage": 0.4007,
+    "level": "warning"
+   }
+  },
+  {
+   "code": "P3",
+   "name": "北坡轮休草场",
+   "images": [
+    {
+     "code": "P3-A-01",
+     "file": "P3-A-01.jpg",
+     "source": "Photo_6553950_DJI_350_jpg_6070519_0_2021111781516_photo_original.jpg",
+     "note": "轮休坡地（退化迹象）",
+     "w": 1440,
+     "h": 1080,
+     "coverage": 0.1848,
+     "greenness": 0.1275
+    },
+    {
+     "code": "P3-B-01",
+     "file": "P3-B-01.jpg",
+     "source": "DJI_0628.JPG",
+     "note": "轮休坡地（干枯）",
+     "w": 1440,
+     "h": 1080,
+     "coverage": 0.1784,
+     "greenness": 0.1459
+    },
+    {
+     "code": "P3-C-01",
+     "file": "P3-C-01.jpg",
+     "source": "DJI_0627.JPG",
+     "note": "轮休坡地（重度退化）",
+     "w": 1440,
+     "h": 1080,
+     "coverage": 0.1319,
+     "greenness": 0.1101
+    }
+   ],
+   "expected": {
+    "mean_coverage": 0.165,
+    "level": "danger"
+   }
+  }
+ ]
+}
