@@ -1,0 +1,6 @@
+# AI牧易通私有羊群检测数据集（scripts/make_private_dataset.py 生成，seed=42，aug_factor=4）
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: sheep

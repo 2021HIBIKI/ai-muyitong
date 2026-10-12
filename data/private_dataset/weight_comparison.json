@@ -1,0 +1,92 @@
+{
+ "note": "由 scripts/compare_weights.py 实测生成；检出数存在 ±2 量级的运行波动。",
+ "weights": {
+  "icaerus": "models\\yolo11n_all.pt",
+  "private_ft": "models\\yolo11n_private.pt"
+ },
+ "sheep_samples": {
+  "n": 10,
+  "mean_abs_error": {
+   "icaerus": 2.4,
+   "private_ft": 1.1
+  },
+  "rows": [
+   {
+    "code": "P1-S-01",
+    "truth": 33,
+    "icaerus": 33,
+    "private_ft": 33
+   },
+   {
+    "code": "P1-S-02",
+    "truth": 19,
+    "icaerus": 16,
+    "private_ft": 19
+   },
+   {
+    "code": "P1-S-03",
+    "truth": 11,
+    "icaerus": 12,
+    "private_ft": 11
+   },
+   {
+    "code": "P1-S-04",
+    "truth": 8,
+    "icaerus": 8,
+    "private_ft": 8
+   },
+   {
+    "code": "P2-S-01",
+    "truth": 149,
+    "icaerus": 161,
+    "private_ft": 152
+   },
+   {
+    "code": "P2-S-02",
+    "truth": 88,
+    "icaerus": 95,
+    "private_ft": 80
+   },
+   {
+    "code": "P2-S-03",
+    "truth": 10,
+    "icaerus": 11,
+    "private_ft": 10
+   },
+   {
+    "code": "P3-S-01",
+    "truth": 7,
+    "icaerus": 7,
+    "private_ft": 7
+   },
+   {
+    "code": "P3-S-02",
+    "truth": 2,
+    "icaerus": 2,
+    "private_ft": 2
+   },
+   {
+    "code": "P3-S-03",
+    "truth": 0,
+    "icaerus": 0,
+    "private_ft": 0
+   }
+  ]
+ },
+ "gallery": {
+  "n": 74,
+  "mean_diff": {
+   "icaerus": 0.47,
+   "private_ft": -11.82
+  },
+  "median_diff": {
+   "icaerus": 0.0,
+   "private_ft": -13.0
+  },
+  "images_off_over_10pct": {
+   "icaerus": 10,
+   "private_ft": 59
+  }
+ },
+ "conclusion": "微调权重在同源（无人机俯拍放牧）样例上更准；在异源（ICAERUS 公路/地面视角）测试图库上系统性低估，说明其有效域收窄到本产品的采集视角。平台默认部署公开权重，微调权重随源码交付，可通过 VISION_MODEL_PATH 切换。"
+}

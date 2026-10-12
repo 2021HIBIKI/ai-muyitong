@@ -60,6 +60,23 @@ pip install --no-deps -i https://pypi.tuna.tsinghua.edu.cn/simple supervision==0
 
 羊专用权重 `yolo11n_all.pt`（约 5.5MB）未入库，请放入 `models/` 目录（已 gitignore）。缺失时自动降级为 COCO 权重 `yolov8s.pt`（首次使用会自动下载）。
 
+### 私有数据集与模型微调（复现报告书表 3-2）
+
+除默认部署的公开羊专用权重外，本产品还提供一组由本团队训练的权重：以公开无人机羊群影像（[Mendeley Data](https://data.mendeley.com/datasets/nppwbkdf85/1)，原始包 >5GB 需自行下载）为源，经确定性管线处理成私有数据集 **Muyitong-Sheep**，再在其上微调 YOLO11n 得到。四步复现：
+
+```bash
+python scripts/make_private_dataset.py   # 1. 建私有数据集：质量筛除→标注转换→密集切片→统一分辨率→增强×4→分层划分（seed=42）
+python scripts/train_private_ft.py       # 2. GPU 微调 30 轮（约 8 分钟；无 GPU 亦可跑，慢十余倍）
+python scripts/eval_private_dataset.py   # 3. 私有验证集评测：公开权重 vs 微调权重 → data/private_dataset/eval_metrics.json
+python scripts/compare_weights.py        # 4. 两组权重在演示资产上的对比 → data/private_dataset/weight_comparison.json
+```
+
+实测（28 张验证图 / 663 只羊，同一推理设置）：mAP@0.5 **29.9% → 93.2%**，精确率 45.9% → 90.8%，召回率 38.9% → 86.6%。
+
+**部署哪一个权重**：两组都随包提供，**默认部署公开权重** `models/yolo11n_all.pt`。对比实测见 `scripts/compare_weights.py`（结果存 `data/private_dataset/weight_comparison.json`）：微调权重在与训练域同源的无人机俯拍样例上更准（平均计数误差 1.1 只 vs 2.4 只），但在异源测试图库（ICAERUS 公路/地面视角 74 张）上系统性低估（中位 −13 只，59 张偏差超 10%；公开权重中位偏差 0）——30 轮微调把有效域收窄到了俯拍放牧视角。要面向塔基俯拍场景部署，改 `VISION_MODEL_PATH=models/yolo11n_private.pt` 即可切换。
+
+数据集图像/标签（`data/private_dataset/images|labels/`）、训练产物（`runs/`）与原始数据包均不入库；入库的是**可复算**的部分：数据清单 `manifest.json`（每张源图的处理轨迹与统计）、数据集配置 `dataset.yaml`、评测结果 `eval_metrics.json` 与权重对比 `weight_comparison.json`、四个管线脚本。
+
 ## 启动
 
 ```bash
@@ -161,7 +178,7 @@ python -m pytest
 | 来源 | License | 用途 |
 |---|---|---|
 | [ICAERUS UC3 Livestock Monitoring](https://github.com/ICAERUS-EU/UC3_Livestock_Monitoring) | GPL-3.0 | 羊专用权重 `yolo11n_all.pt`、样例图（`data/samples/`）及测试图库（`data/samples/gallery/`：视频 `sheep_crossing.MP4` 抽帧 50 张 + 网格切分 24 张） |
-| [UAV footage of Merino sheep in South Africa](https://data.mendeley.com/datasets/nppwbkdf85/1)（Mendeley Data，2022） | 以数据集页面标注为准 | 羊群识别快速样例 10 张（`data/samples/sheep/`，编号 `P1-S-01`…`P3-S-03`）+ 草场分区编号照片 10 张（`data/samples/grassland/`，编号 `P1-A-01`…`P3-C-01`）：真实无人机影像（含 COCO 点标注真值）；分别由 `scripts/make_sheep_samples.py` / `scripts/make_grassland_samples.py` 确定性生成，原始数据包（>5GB）不入库，使用前请核对数据集许可 |
+| [UAV footage of Merino sheep in South Africa](https://data.mendeley.com/datasets/nppwbkdf85/1)（Mendeley Data，2022） | 以数据集页面标注为准 | **私有数据集 Muyitong-Sheep**（`data/private_dataset/`）由其处理而来：质量筛除→标注转换→密集切片→统一分辨率→确定性增强→分层划分，管线见 `scripts/make_private_dataset.py`； 羊群识别快速样例 10 张（`data/samples/sheep/`，编号 `P1-S-01`…`P3-S-03`）+ 草场分区编号照片 10 张（`data/samples/grassland/`，编号 `P1-A-01`…`P3-C-01`）：真实无人机影像（含 COCO 点标注真值）；分别由 `scripts/make_sheep_samples.py` / `scripts/make_grassland_samples.py` 确定性生成，原始数据包（>5GB）不入库，使用前请核对数据集许可 |
 | [geezacoleman/OpenWeedLocator](https://github.com/geezacoleman/OpenWeedLocator) | MIT | `exg()` / `exg_standardised()` / `exg_standardised_hue()` 植被分割算法移植（`app/vision/grassland.py`，保留来源注释） |
 | [ultralytics](https://github.com/ultralytics/ultralytics) | AGPL-3.0 | 推理框架（作库调用，未修改源码） |
 | [apache/echarts](https://github.com/apache/echarts) | Apache-2.0 | 大屏图表库（CDN 引入：npmmirror 优先、jsdelivr 兜底） |

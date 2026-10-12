@@ -7,3 +7,8 @@ __pycache__/
 .pytest_cache/
 # 本地配置与密钥
 .env
+# 私有数据集的图像/标签与训练产物（由 scripts/make_private_dataset.py 现场生成；清单/配置/评测结果入库）
+data/private_dataset/images/
+data/private_dataset/labels/
+runs/
+data/_*.log
