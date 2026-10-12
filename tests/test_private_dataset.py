@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import cv2
@@ -162,3 +163,27 @@ def test_dataset_yaml_points_at_manifest_paths():
     text = YAML.read_text(encoding="utf-8")
     for key in ("train: images/train", "val: images/val", "test: images/test", "0: sheep"):
         assert key in text, key
+    assert "path:" not in text, "不写绝对 path，换台机器才能直接加载"
+
+
+# 与 scripts/strip_weight_paths.py 的 DRIVE_HINT 同形：必须“像路径”（盘符之后还有
+# ≥4 个路径字符、盘符前不接字母数字），否则浮点张量里的随机字节会误报。
+_ABS_PATH = re.compile(rb"(?<![A-Za-z0-9])(?:[A-Za-z]:[\\/]|/Anaconda/)[A-Za-z0-9_.\- /\\]{4,}")
+
+
+def test_shipped_artifacts_carry_no_local_absolute_paths():
+    """发布信息卫生：随包的清单/配置/评测结果/权重里不得内嵌本机绝对路径。
+
+    pickle 会把训练机的 model / data / save_dir 原样写进 checkpoint，发布前需用
+    scripts/strip_weight_paths.py 清除——这条守卫防止重新训练或重新生成后再漏出去。
+    """
+    artifacts = [MANIFEST, YAML, DATA_DIR / "eval_metrics.json", DATA_DIR / "weight_comparison.json"]
+    artifacts += sorted((ROOT / "models").glob("*.pt"))
+    checked = 0
+    for path in artifacts:
+        if not path.exists():
+            continue
+        checked += 1
+        hits = _ABS_PATH.findall(path.read_bytes())
+        assert not hits, f"{path.name} 内嵌本机绝对路径：{[h[:60] for h in hits[:3]]}"
+    assert checked >= 3, "随包产物缺失，检查无意义"

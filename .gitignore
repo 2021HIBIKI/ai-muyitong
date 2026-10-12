@@ -12,3 +12,16 @@ data/private_dataset/images/
 data/private_dataset/labels/
 runs/
 data/_*.log
+# 环境与本地目录（README 的快速开始会在仓库内创建 .venv）
+.venv/
+venv/
+env/
+# 原始数据包与压缩包（>5GB，不入库）
+UAV footage of Merino sheep in South Africa/
+*.zip
+# 本地留存的成片与文档（体量大）
+*.mp4
+*.MP4
+*.pdf
+logs/
+*.log

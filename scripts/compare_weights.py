@@ -8,8 +8,8 @@
 1. 羊群快速样例 10 张（Mendeley 来源，有 COCO 点标注真值）—— 微调权重的训练域同源；
 2. 测试图库 74 张（ICAERUS 视频抽帧 + 网格切片）—— 与微调训练域不同源，考察跨源泛化。
 
-用法（GPU 环境）：
-    /d/Anaconda/envs/muyitong/python.exe scripts/compare_weights.py
+用法（有 GPU 更快，CPU 亦可，约 3 分钟）：
+    python scripts/compare_weights.py
 
 输出：data/private_dataset/weight_comparison.json（结论随报告书一并引用，可复算）
 """

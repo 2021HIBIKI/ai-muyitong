@@ -40,12 +40,17 @@ curl -s -o /dev/null -w "GET /api/pastures  -> 未带令牌   HTTP %{http_code}�
 say "3. 大屏概览（KPI）"
 curl -sf "${AUTH[@]}" "$BASE/api/dashboard/overview" | pretty
 
-say "4. 趋势与环境数据量"
+say "4. 趋势与环境数据量（覆盖度逐草场独立，不做跨草场平均）"
 curl -sf "${AUTH[@]}" "$BASE/api/dashboard/trends?days=30" | py "
 import json, sys
 d = json.load(sys.stdin)['data']
-print(f\"覆盖度序列 {len(d['coverage'])} 条，羊数序列 {len(d['sheep'])} 条\")
-print(f\"最新覆盖度 {d['coverage'][-1]['coverage']:.2%}，最新羊数 {d['sheep'][-1]['count']} 只\")
+print(f\"草场 {len(d['pastures'])} 个，羊数序列 {len(d['sheep'])} 条\")
+for p in d['pastures']:
+    c = [x for x in p['coverage'] if x['coverage'] is not None]
+    tail = f\"最新覆盖度 {c[-1]['coverage']:.2%}（{c[-1]['day']}）\" if c else '暂无覆盖度记录'
+    print(f\"  {p['code']} {p['name']}：覆盖度序列 {len(p['coverage'])} 天，{tail}\")
+if d['sheep']:
+    print(f\"最新羊数 {d['sheep'][-1]['count']} 只\")
 "
 curl -sf "${AUTH[@]}" "$BASE/api/dashboard/environment?limit=48" | py "
 import json, sys

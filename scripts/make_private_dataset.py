@@ -360,8 +360,13 @@ def build(zip_path: Path, dst: Path, seed: int, aug_factor: int, limit: int | No
     manifest = {
         "name": "AI牧易通私有羊群检测数据集（UAV Merino 公开数据集确定性派生）",
         "source": {
-            "dataset": "UAV footage of Merino sheep in South Africa (Mendeley Data, nppwbkdf85/1)",
-            "zip": str(zip_path),
+            "dataset": "UAV footage of Merino sheep in South Africa",
+            "authors": "Theart, Rensu; Schreve, Kristiaan",
+            "publisher": "Mendeley Data, 2024-03-28",
+            "doi_url": "https://data.mendeley.com/datasets/nppwbkdf85/1",
+            "license": "CC BY 4.0（Creative Commons Attribution 4.0 International）",
+            # 只记相对位置，不写入本机绝对路径（清单会随包公开发布）
+            "archive": str(Path("UAV footage of Merino sheep in South Africa") / zip_path.name),
             "note": (
                 "公开数据集 → 本团队私有派生集：质量筛除 + 点标注转统一框 + 密集切片 + "
                 "统一分辨率 + train 确定性增强 + 分层划分（同源切片/变体不跨划分，防泄漏）"

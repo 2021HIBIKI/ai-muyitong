@@ -13,5 +13,6 @@
   "precision": 0.9082,
   "recall": 0.8655
  },
- "val_images": 28
+ "val_images": 28,
+ "note": "ft 权重 = runs/private_ft/weights/best.pt（由 scripts/train_private_ft.py 生成）；随源码交付的等价文件是 models/yolo11n_private.pt（499 个张量逐元素相同，仅清除过内嵌本机路径）。两组权重在同一验证集、同一推理设置下评测。"
 }

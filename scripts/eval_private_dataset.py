@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-"""私有数据集上的模型评估：公开权重 vs 微调权重（GPU）。
+"""私有数据集上的模型评估：公开权重 vs 微调权重。
 
-输出 runs/private_ft/eval_metrics.json（报告书表 3-2 的数据来源）并打印摘要。
+输出 data/private_dataset/eval_metrics.json（报告书表 3-2 的数据来源）并打印摘要。
 
-用法（GPU 环境，避免与 .venv 抢 GPU）：
-    /d/Anaconda/envs/muyitong/python.exe scripts/eval_private_dataset.py
+用法（有 GPU 更快；纯 CPU 亦可，约 1 分钟）：
+    python scripts/eval_private_dataset.py
+
+前置：微调权重 runs/private_ft/weights/best.pt（由 scripts/train_private_ft.py 生成；
+      随包交付的等价文件是 models/yolo11n_private.pt，499 个张量逐元素相同）。
 
 两处刻意的写法，别改：
 - `workers=0`：Windows 下 ultralytics 的 val 默认 spawn DataLoader 子进程，子进程会重新
@@ -49,6 +52,11 @@ def main() -> None:
               f"P={out[tag]['precision']} R={out[tag]['recall']}", flush=True)
 
     out["val_images"] = len(list((ROOT / "data" / "private_dataset" / "images" / "val").glob("*.jpg")))
+    out["note"] = (
+        "ft 权重 = runs/private_ft/weights/best.pt（由 scripts/train_private_ft.py 生成）；"
+        "随源码交付的等价文件是 models/yolo11n_private.pt（499 个张量逐元素相同，仅清除过内嵌本机路径）。"
+        "两组权重在同一验证集、同一推理设置下评测。"
+    )
     dst = ROOT / "data" / "private_dataset" / "eval_metrics.json"
     dst.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(out, ensure_ascii=False, indent=1), flush=True)

@@ -1,8 +1,12 @@
 {
  "name": "AI牧易通私有羊群检测数据集（UAV Merino 公开数据集确定性派生）",
  "source": {
-  "dataset": "UAV footage of Merino sheep in South Africa (Mendeley Data, nppwbkdf85/1)",
-  "zip": "C:\\Users\\ASUS\\Desktop\\比赛\\ican\\智慧农业\\UAV footage of Merino sheep in South Africa\\Data.zip",
+  "dataset": "UAV footage of Merino sheep in South Africa",
+  "authors": "Theart, Rensu; Schreve, Kristiaan",
+  "publisher": "Mendeley Data, 2024-03-28",
+  "doi_url": "https://data.mendeley.com/datasets/nppwbkdf85/1",
+  "license": "CC BY 4.0（Creative Commons Attribution 4.0 International）",
+  "archive": "UAV footage of Merino sheep in South Africa\\Data.zip",
   "note": "公开数据集 → 本团队私有派生集：质量筛除 + 点标注转统一框 + 密集切片 + 统一分辨率 + train 确定性增强 + 分层划分（同源切片/变体不跨划分，防泄漏）"
  },
  "params": {
